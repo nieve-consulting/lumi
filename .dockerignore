@@ -1,0 +1,30 @@
+# Build context of the container images (backend/Dockerfile, frontend/Dockerfile), sent from the repository root.
+# Keep secrets, local state and build output out of it: images are built from source and dependencies installed inside.
+
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+**/coverage
+**/.vercel
+
+# Credentials and local configuration never enter an image
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+
+# Local state
+.git
+.github
+.claude
+.vscode
+local-dev
+deploy
+**/.pgdata
+**/.DS_Store
+**/npm-debug.log*
+
+# Not part of the images
+widget/node_modules

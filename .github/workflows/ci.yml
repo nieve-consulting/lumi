@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      workspaces: ${{ steps.workspaces.outputs.list || '[]' }}
+      compose: ${{ steps.filter.outputs.compose || 'false' }}
+    steps:
+      # Commits merged from a pull request were already checked there, so only direct pushes to main are checked again
+      - name: Check if the push comes from a pull request
+        id: merged-pr
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '[.[] | select(.merged_at != null)] | length')
+          echo "merged=$([ "$count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: steps.merged-pr.outputs.merged != 'true'
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: steps.merged-pr.outputs.merged != 'true'
+        with:
+          filters: |
+            shared: &shared
+              - .nvmrc
+              - .prettierrc
+              - .github/workflows/ci.yml
+            pnpm: &pnpm
+              - package.json
+              - pnpm-lock.yaml
+              - pnpm-workspace.yaml
+            # Shared TypeScript source compiled by the frontend and the backend
+            contracts: &contracts
+              - packages/**
+            frontend:
+              - *shared
+              - *pnpm
+              - *contracts
+              - frontend/**
+            backend:
+              - *shared
+              - *pnpm
+              - *contracts
+              - backend/**
+            widget:
+              - *shared
+              - widget/**
+            compose:
+              - .github/workflows/ci.yml
+              - deploy/**
+
+      - name: List changed workspaces
+        id: workspaces
+        if: steps.filter.outcome == 'success'
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: echo "list=$(jq -c 'map(select(. == "frontend" or . == "backend" or . == "widget"))' <<< "$CHANGES")" >> "$GITHUB_OUTPUT"
+
+      # Images are built only by the release workflow, when a release is published
+
+  checks:
+    name: Check ${{ matrix.workspace }}
+    needs: changes
+    if: needs.changes.outputs.workspaces != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: ${{ fromJSON(needs.changes.outputs.workspaces) }}
+    env:
+      # The widget is not part of the pnpm workspace and uses npm
+      PM: ${{ matrix.workspace == 'widget' && 'npm' || 'pnpm' }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.workspace }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        if: env.PM == 'pnpm'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: ${{ env.PM }}
+          cache-dependency-path: ${{ env.PM == 'npm' && 'widget/package-lock.json' || 'pnpm-lock.yaml' }}
+
+      - name: Install dependencies
+        id: install
+        run: ${{ env.PM == 'npm' && 'npm ci' || 'pnpm install --frozen-lockfile' }}
+
+      # Run every check even if a previous one fails, so a single run reports all problems
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: $PM run lint
+
+      - name: Typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: $PM run typecheck
+
+      - name: Format
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: $PM run format:check
+
+  compose:
+    name: Validate installation configuration
+    needs: changes
+    if: needs.changes.outputs.compose == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate Compose with the example settings
+        run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --quiet

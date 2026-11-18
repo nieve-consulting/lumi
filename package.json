@@ -1,0 +1,21 @@
+{
+  "name": "lumi",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "start:local-dev": "docker compose -f ./local-dev/docker-local-env.yaml up",
+    "stop:local-dev": "docker compose -f ./local-dev/docker-local-env.yaml down",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "pnpm -r format",
+    "format:check": "pnpm -r format:check"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.10"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2"
+  }
+}

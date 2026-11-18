@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "jsx": "react",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "stripInternal": true
+  },
+  "include": ["src/widget.tsx", "src/env.d.ts"]
+}

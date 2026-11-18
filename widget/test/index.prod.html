@@ -1,0 +1,19 @@
+<html>
+  <head>
+    <title>Test</title>
+    <script src="http://localhost:8080/scripts/lumi-widget.bundle.umd.js"></script>
+    <style>
+      #test-container {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="test-container"></div>
+    <script>
+      LumiWidget.init({ selector: "test-container" })
+    </script>
+  </body>
+</html>

@@ -1,0 +1,75 @@
+# The installation's public entry (deploy/compose.yaml). LUMI_SITE_ADDRESS decides how it is served:
+# - a domain such as lumi.example.com: HTTPS with a certificate Caddy obtains and renews automatically (ports 80 and 443
+#   must be reachable from the internet and the domain must point at this host)
+# - :80: plain HTTP, for a trial on localhost or behind a TLS-terminating proxy or load balancer of your own
+#
+# Local development (local-dev/docker-local-env.yaml) runs this same file in front of the development servers on the host:
+# it sets the LUMI_*_UPSTREAM addresses, which default to the installation's services
+{
+	# No admin endpoint: the configuration only changes by editing this file and restarting the proxy
+	admin off
+
+	servers {
+		# Proxies in front of this one whose X-Forwarded-For is believed. By default none: the client address is the
+		# connection's, and any X-Forwarded-For a client sends is replaced, so the sign-in limits per address hold
+		trusted_proxies static {$LUMI_TRUSTED_PROXIES:127.0.0.1/32}
+	}
+}
+
+{$LUMI_SITE_ADDRESS} {
+	# The public agents API, streamed to the browser as it is produced. Its /admin routes stay private: /admin is the
+	# web app's admin interface
+	@agents path /agents /agents/*
+	handle @agents {
+		reverse_proxy {$LUMI_AGENTS_UPSTREAM:agents:4200} {
+			flush_interval -1
+		}
+	}
+
+	# The GraphQL API and PDF rendering, for the API keys admins generate in Settings → Developer
+	# (https://docs.lumi.nieve.ai/developers/api-keys). The header, which replaces any a client sends, tells the api service
+	# the request came through here: it then refuses the installation's own LUMI_API_KEY, which only works on the private
+	# network. Both are the api service's; in local development PDFs are the tasks server's
+	@api path /graphql
+	handle @api {
+		reverse_proxy {$LUMI_API_UPSTREAM:api:4000} {
+			header_up X-Lumi-Proxied 1
+		}
+	}
+
+	@pdf path /pdf
+	handle @pdf {
+		reverse_proxy {$LUMI_PDF_UPSTREAM:api:4000} {
+			header_up X-Lumi-Proxied 1
+		}
+	}
+
+	# Image uploads to the bundled media storage, on the installation's own address so browsers need
+	# no CORS rules or second domain. Each upload carries a short-lived signature the api made for that one file, which the
+	# storage checks against the Host and path as received: neither is rewritten. Nothing else of the storage is public
+	@storage {
+		method PUT
+		path /lumi-media/*
+	}
+	handle @storage {
+		reverse_proxy {$LUMI_STORAGE_UPSTREAM:storage:8333}
+	}
+
+	# The MCP server and its OAuth authorization server
+	@mcp path /mcp /oauth/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/* /.well-known/oauth-authorization-server
+	handle @mcp {
+		reverse_proxy {$LUMI_MCP_UPSTREAM:mcp:4300}
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy {$LUMI_FRONTEND_UPSTREAM:frontend:3000}
+	}
+
+	header {
+		-Server
+		# Browsers only honour it over HTTPS, so a plain-HTTP trial on localhost is unaffected
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
+}

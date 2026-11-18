@@ -1,0 +1,18 @@
+packages:
+  - frontend
+  - backend
+  - packages/*
+overrides:
+  # @ai-sdk/otel pins an exact ai version; share the workspace's ai so its telemetry matches the ai that sends the events
+  '@ai-sdk/otel>ai': ^7.0.141
+allowBuilds:
+  '@apollo/protobufjs': true
+  aws-sdk: true
+  es5-ext: true
+  esbuild: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@langchain/openai@1.6.2'
+  - '@graphql-tools/schema@10.1.5'

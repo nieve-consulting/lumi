@@ -1,0 +1,74 @@
+# The local services for development (https://docs.lumi.nieve.ai/getting-started): the database, the media storage and the
+# proxy in front of the development servers, which run on the host with reloading. They match the container installation's
+# services (deploy/compose.services.yaml): keep the images in step with it. The proxy runs its Caddyfile, so development
+# runs behind the same routes.
+#
+#   pnpm start:local-dev    # from the repository root
+#
+# Every port is published on localhost only, and every credential here is for development only.
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg18
+    container_name: local_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: lumi
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./.pgdata:/var/lib/postgresql
+
+  # SeaweedFS, which creates the lumi-media bucket and the access key lumi when it starts. The backend and the web app's
+  # server reach it on http://localhost:8333 (S3_ENDPOINT); browsers upload through the proxy (S3_PUBLIC_ENDPOINT)
+  storage:
+    image: chrislusf/seaweedfs:4.53
+    restart: unless-stopped
+    command: ["mini", "-dir=/data"]
+    environment:
+      AWS_ACCESS_KEY_ID: lumi
+      AWS_SECRET_ACCESS_KEY: lumi-local-development-only
+      S3_BUCKET: lumi-media
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Caddy with the installation's Caddyfile on http://localhost:8080, forwarding to the development servers on the host as
+  # it forwards to the services in a container installation, and uploads to the storage. A server that isn't running
+  # answers 502; starting or restarting one needs no restart here
+  proxy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    environment:
+      LUMI_SITE_ADDRESS: ":80"
+      LUMI_FRONTEND_UPSTREAM: host.docker.internal:3000 # pnpm -C frontend dev
+      LUMI_API_UPSTREAM: host.docker.internal:4000 # pnpm -C backend dev:apollo
+      LUMI_AGENTS_UPSTREAM: host.docker.internal:4200 # pnpm -C backend dev:agents
+      LUMI_MCP_UPSTREAM: host.docker.internal:4300 # pnpm -C backend dev:mcp
+      LUMI_PDF_UPSTREAM: host.docker.internal:4500 # pnpm -C backend dev:tasks
+      LUMI_STORAGE_UPSTREAM: storage:8333
+    # Docker Desktop provides host.docker.internal; on Linux this maps it to the host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ../deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - storage
+
+volumes:
+  storage-data:
+  caddy-data:
+  caddy-config:

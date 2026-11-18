@@ -1,0 +1,10 @@
+@reference "../../../../../app/globals.css";
+
+/* Days with meeting times, tinted with the chat's primary colour (see BrandTheme) */
+td[role="gridcell"].available {
+  @apply bg-primary/30 rounded-full;
+}
+
+td[role="gridcell"]:not(.available) button {
+  @apply line-through;
+}

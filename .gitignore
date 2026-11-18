@@ -1,0 +1,48 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/frontend/.next/
+/frontend/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env files: every .env, .env.* and *.local variant, and direnv's .envrc, except the committed examples
+.env
+.env.*
+.env*.local
+.envrc
+.envrc.*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+.pgdata
+
+# A Chromium headless shell installed for local PDFs without --path (https://docs.lumi.nieve.ai/getting-started)
+chrome-headless-shell/
+
+/.claude/worktrees

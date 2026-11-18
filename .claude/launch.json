@@ -1,0 +1,52 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "apollo",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "backend", "dev:apollo"],
+      "port": 4000
+    },
+    {
+      "name": "agents",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "backend", "dev:agents"],
+      "port": 4200
+    },
+    {
+      "name": "mcp",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "backend", "dev:mcp"],
+      "port": 4300
+    },
+    {
+      "name": "tasks",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "backend", "dev:tasks"],
+      "port": 4500
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "frontend", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "proxy",
+      "url": "http://localhost:8080",
+      "port": 8080
+    },
+    {
+      "name": "widget",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "widget", "start"],
+      "port": 2000
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "../lumi-docs", "dev", "--port", "3100"],
+      "port": 3100
+    }
+  ]
+}

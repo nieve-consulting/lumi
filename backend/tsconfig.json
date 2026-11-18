@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "preserve",
+    "outDir": "./dist",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@db/*": ["./db/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/apollo/schema/teamMembers/types.gql.ts"],
+  "exclude": ["node_modules", "dist"]
+}

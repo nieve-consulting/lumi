@@ -1,0 +1,9 @@
+{
+  "node_version": "24",
+  "dockerfile_lines": [],
+  "dependencies": ["."],
+  "graphs": {
+    "pre-sales": "./src/ai/agents/pre-sales/graph.ts:graph"
+  },
+  "env": ".env"
+}

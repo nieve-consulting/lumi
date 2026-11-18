@@ -1,0 +1,33 @@
+<html>
+  <head>
+    <title>Test</title>
+    <script src="http://localhost:2000/main.js"></script>
+    <style>
+      #test-container {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="test-container"></div>
+    <a href="#open-lumi">Open Lumi</a>
+    <script>
+      // Connects to the web app on http://localhost:8080 (the local proxy); pass origin to try another installation
+      LumiWidget.init({ selector: "test-container", pageTitle: "This is test page" })
+      // LumiWidget.init({ selector: "test-container", pageTitle: "This is test page", origin: "https://lumi.example.com" })
+      // The assistant's name in the launcher's labels and the chat's title
+      // LumiWidget.init({ selector: "test-container", pageTitle: "This is test page", assistantName: "Ada" })
+      // Spanish launcher and chat; an unsupported tag such as "fr" falls back to English
+      // LumiWidget.init({ selector: "test-container", pageTitle: "This is test page", language: "es-MX" })
+      // LumiWidget.init({
+      //   selector: "test-container",
+      //   pageTitle: "This is test page",
+      //   ctaText: "Click me",
+      //   backgroundColor: "red",
+      //   color: "white",
+      // })
+    </script>
+  </body>
+</html>

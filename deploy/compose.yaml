@@ -1,0 +1,16 @@
+# A complete single-business Lumi installation: https://docs.lumi.nieve.ai/self-hosting is the guide.
+#
+#   cp .env.example .env              # then fill it in
+#   docker compose build
+#   docker compose run --rm api migrate
+#   docker compose up -d
+#
+# The services are in compose.services.yaml. The database and the media storage are bundled unless deploy/.env names ones
+# you already run: with DB_HOST set, the postgres service isn't started, and with S3_UPLOADS_BUCKET_NAME set, the storage
+# service isn't. bundled.env derives that from deploy/.env, so nothing here needs editing.
+
+name: lumi
+
+include:
+  - path: compose.services.yaml
+    env_file: bundled.env

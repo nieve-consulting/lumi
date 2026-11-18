@@ -1,0 +1,305 @@
+# The services of a Lumi installation, included by compose.yaml, which is the file to run: it adds the settings derived
+# in bundled.env (LUMI_BUNDLED_DATABASE and LUMI_BUNDLED_STORAGE). https://docs.lumi.nieve.ai/self-hosting is the guide.
+#
+# Only the proxy publishes ports. Every other service is reachable only on the installation's private network.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+# The backend image runs as the GraphQL API, the agents API or the background worker, depending on its command
+x-backend: &backend
+  image: ${LUMI_IMAGE_PREFIX:-lumi}-backend:${LUMI_VERSION:-local}
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile
+    args:
+      # Reported by the status command and recorded in exports
+      LUMI_VERSION: ${LUMI_VERSION:-local}
+      # A registry prefix stops the build: those images are pulled, never built from the checkout
+      LUMI_IMAGE_PREFIX: ${LUMI_IMAGE_PREFIX:-lumi}
+  restart: unless-stopped
+  # Longer than the services' own shutdown timeout (src/container/server.ts), so open requests, streamed replies and a
+  # running crawl finish before Docker stops the container
+  stop_grace_period: 30s
+  logging: *logging
+  # Compose doesn't wait for a dependency it runs no container of, so with a database of your own (scale 0) the services
+  # start at once
+  depends_on: &backend-depends-on
+    postgres:
+      condition: service_healthy
+
+# The database. With the bundled one, the services set the DB_* settings for it themselves, from POSTGRES_PASSWORD
+# (backend/src/container/config.ts), and report any you filled in; otherwise they name a PostgreSQL server of your own
+x-backend-env: &backend-env
+  LUMI_BUNDLED_DATABASE: ${LUMI_BUNDLED_DATABASE:-1}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+  DB_HOST: ${DB_HOST:-}
+  DB_PORT: ${DB_PORT:-}
+  DB_USER: ${DB_USER:-}
+  DB_PASSWORD: ${DB_PASSWORD:-}
+  DB_NAME: ${DB_NAME:-}
+  DB_SSL: ${DB_SSL:-}
+  DB_SSL_REJECT_UNAUTHORIZED: ${DB_SSL_REJECT_UNAUTHORIZED:-}
+  DB_SSL_CA: ${DB_SSL_CA:-}
+  API_KEY: ${LUMI_API_KEY:?Set LUMI_API_KEY in deploy/.env}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in deploy/.env}
+  APP_BASE_URL: ${LUMI_PUBLIC_URL:?Set LUMI_PUBLIC_URL in deploy/.env}
+  # Optional: email delivery of enquiries and meeting emails
+  EMAIL_FROM: ${EMAIL_FROM:-}
+  SMTP_URL: ${SMTP_URL:-}
+  # Optional: in-chat Google Calendar booking
+  GOOGLE_SERVICE_ACCOUNT_CREDENTIALS: ${GOOGLE_SERVICE_ACCOUNT_CREDENTIALS:-}
+  # Optional: Langfuse tracing, on only when both keys are set
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_TRACING_ENVIRONMENT: ${LANGFUSE_TRACING_ENVIRONMENT:-production}
+
+# Media storage for uploaded images, which only the api service uses (and the export and import commands it runs). With the
+# bundled storage, it sets the S3_* settings for it itself (backend/src/container/config.ts) and reports any you filled in;
+# otherwise they name S3-compatible storage of your own
+x-storage-env: &storage-env
+  LUMI_BUNDLED_STORAGE: ${LUMI_BUNDLED_STORAGE:-1}
+  LUMI_STORAGE_SECRET_KEY: ${LUMI_STORAGE_SECRET_KEY:-}
+  S3_UPLOADS_BUCKET_NAME: ${S3_UPLOADS_BUCKET_NAME:-}
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:-}
+  S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-}
+  # The storage's own access key, never used for other AWS services
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+
+x-healthcheck: &healthcheck
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 30s
+
+services:
+  postgres:
+    # PostgreSQL 18 with pgvector. The database keeps everything Lumi stores, in the postgres-data volume. Left out, with
+    # scale 0, when DB_HOST names a database of your own (bundled.env). Never more than 1: two containers must not share
+    # the volume
+    image: pgvector/pgvector:0.8.7-pg18
+    scale: ${LUMI_BUNDLED_DATABASE:-1}
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: lumi
+      POSTGRES_DB: lumi
+      # Read only when the volume is first initialized; see
+      # https://docs.lumi.nieve.ai/self-hosting#changing-the-database-password to change it later. Required unless DB_HOST
+      # names a database of your own: LUMI_BUNDLED_DATABASE is then 0 (bundled.env), which stands in for the password of
+      # this service that never starts
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-${LUMI_BUNDLED_DATABASE:?Set POSTGRES_PASSWORD in deploy/.env, or DB_HOST for a database of your own}}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumi -d lumi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Media storage for uploaded images: SeaweedFS, as an S3-compatible store in the storage-data volume. Left out, with scale
+  # 0, when S3_UPLOADS_BUCKET_NAME names storage of your own (bundled.env). When it starts it creates the lumi-media bucket
+  # if missing, and the access key lumi with LUMI_STORAGE_SECRET_KEY. The api service reads and writes it, and the web app
+  # reads it, on the storage network; admins' browsers upload through the proxy, which forwards only PUT /lumi-media/*
+  # (Caddyfile), with an address the api signed for that upload
+  storage:
+    image: chrislusf/seaweedfs:4.53
+    scale: ${LUMI_BUNDLED_STORAGE:-1}
+    restart: unless-stopped
+    logging: *logging
+    networks: [storage]
+    # Without a key SeaweedFS accepts every request, so it starts with neither none nor the published example value, as the
+    # backend checks it (bundledStorageProblem in backend/src/container/config.ts)
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        case "$$AWS_SECRET_ACCESS_KEY" in
+          *[![:space:]]*) ;;
+          *)
+            echo "LUMI_STORAGE_SECRET_KEY is not set: set it to a random value in deploy/.env, e.g. the output of openssl rand -hex 32, or set the S3_* settings to use storage of your own" >&2
+            exit 1
+            ;;
+        esac
+        if printf '%s' "$$AWS_SECRET_ACCESS_KEY" | grep -Eiq 'replace-(with|me)'; then
+          echo "LUMI_STORAGE_SECRET_KEY is still the example value from deploy/.env.example: replace it with a random value, e.g. the output of openssl rand -hex 32" >&2
+          exit 1
+        fi
+        exec /entrypoint.sh mini -dir=/data
+    environment:
+      AWS_ACCESS_KEY_ID: lumi
+      AWS_SECRET_ACCESS_KEY: ${LUMI_STORAGE_SECRET_KEY:-}
+      S3_BUCKET: lumi-media
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # GraphQL API (/graphql) and PDF rendering (/pdf): called by the web app's server with the API key, and through the proxy
+  # by other systems with the API keys admins generate. Also runs the one-off operator commands: migrate, admin-reset,
+  # checkpoint-cleanup, status, export, import and delete-conversations (docker compose run --rm api <command> --help)
+  api:
+    <<: *backend
+    command: ["api"]
+    # The storage only serves images: if it doesn't start, the api starts without it, and says why
+    depends_on:
+      <<: *backend-depends-on
+      storage:
+        condition: service_healthy
+        required: false
+    networks: [default, storage]
+    environment:
+      <<: [*backend-env, *storage-env]
+      WEBSITE_CRAWLER_URL: http://worker:4500
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+
+  # Streaming agents API: /agents is public through the proxy, /admin only for the web app's server
+  agents:
+    <<: *backend
+    command: ["agents"]
+    environment:
+      <<: *backend-env
+      AGENTS_ALLOWED_ORIGINS: ${LUMI_PUBLIC_URL:?Set LUMI_PUBLIC_URL in deploy/.env}
+      # Public conversation limits (https://docs.lumi.nieve.ai/security#limits). Empty keeps the default
+      LUMI_CHAT_TURNS_PER_MINUTE: ${LUMI_CHAT_TURNS_PER_MINUTE:-}
+      LUMI_CHAT_THREADS_PER_MINUTE: ${LUMI_CHAT_THREADS_PER_MINUTE:-}
+      LUMI_HANDOFFS_PER_HOUR: ${LUMI_HANDOFFS_PER_HOUR:-}
+      LUMI_MAX_MESSAGES_PER_CONVERSATION: ${LUMI_MAX_MESSAGES_PER_CONVERSATION:-}
+      LUMI_DAILY_SPEND_LIMIT_USD: ${LUMI_DAILY_SPEND_LIMIT_USD:-}
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4200/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+
+  # Background work: website crawls, the weekly cleanup of conversation checkpoints and the optional daily deletion of
+  # inactive conversations
+  worker:
+    <<: *backend
+    command: ["worker"]
+    # A running crawl stops before its next page and records that it stopped
+    environment:
+      <<: *backend-env
+      CHECKPOINT_CLEANUP_SCHEDULE: ${CHECKPOINT_CLEANUP_SCHEDULE:-on}
+      # Days without activity after which a conversation is deleted, with its enquiries. Empty keeps conversations
+      CONVERSATION_RETENTION_DAYS: ${CONVERSATION_RETENTION_DAYS:-}
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4500/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+
+  # MCP server (the ChatGPT connector) and its OAuth authorization server, public through the proxy at /mcp, /oauth and
+  # /.well-known/oauth-*. Admins sign in to it the way they sign in to the admin interface
+  mcp:
+    <<: *backend
+    command: ["mcp"]
+    environment:
+      <<: *backend-env
+      ADMIN_AUTH_PROVIDER: ${ADMIN_AUTH_PROVIDER:-local}
+      MCP_BASE_URL: ${LUMI_PUBLIC_URL:?Set LUMI_PUBLIC_URL in deploy/.env}
+      MCP_TOKEN_SECRET: ${MCP_TOKEN_SECRET:?Set MCP_TOKEN_SECRET in deploy/.env}
+      MCP_ALLOWED_REDIRECT_ORIGINS: ${MCP_ALLOWED_REDIRECT_ORIGINS:-}
+      # With ADMIN_AUTH_PROVIDER=workspace: team sign-in with Google Workspace
+      MCP_GOOGLE_CLIENT_ID: ${MCP_GOOGLE_CLIENT_ID:-}
+      MCP_GOOGLE_CLIENT_SECRET: ${MCP_GOOGLE_CLIENT_SECRET:-}
+      ADMIN_ALLOWED_DOMAINS: ${ADMIN_ALLOWED_DOMAINS:-}
+      ADMIN_GOOGLE_GROUP: ${ADMIN_GOOGLE_GROUP:-}
+      MCP_WRITE_GOOGLE_GROUP: ${MCP_WRITE_GOOGLE_GROUP:-}
+      GOOGLE_DIRECTORY_CREDENTIALS: ${GOOGLE_DIRECTORY_CREDENTIALS:-}
+      GOOGLE_DIRECTORY_IMPERSONATED_USER: ${GOOGLE_DIRECTORY_IMPERSONATED_USER:-}
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4300/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+
+  # Web app: public chat, /widget page, widget script, onboarding wizard and admin interface
+  frontend:
+    image: ${LUMI_IMAGE_PREFIX:-lumi}-frontend:${LUMI_VERSION:-local}
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        # The browser calls the agents API on the installation's own origin, through the proxy
+        NEXT_PUBLIC_AGENTS_ENDPOINT: /agents
+        # A registry prefix stops the build: those images are pulled, never built from the checkout
+        LUMI_IMAGE_PREFIX: ${LUMI_IMAGE_PREFIX:-lumi}
+    restart: unless-stopped
+    logging: *logging
+    # Also on the storage network: it downloads the images it serves at /media from the bundled storage
+    networks: [default, storage]
+    environment:
+      API_ENDPOINT: http://api:4000
+      API_KEY: ${LUMI_API_KEY:?Set LUMI_API_KEY in deploy/.env}
+      AGENTS_INTERNAL_ENDPOINT: http://agents:4200/agents
+      APP_BASE_URL: ${LUMI_PUBLIC_URL:?Set LUMI_PUBLIC_URL in deploy/.env}
+      NEXTAUTH_URL: ${LUMI_PUBLIC_URL:?Set LUMI_PUBLIC_URL in deploy/.env}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in deploy/.env}
+      ADMIN_AUTH_PROVIDER: ${ADMIN_AUTH_PROVIDER:-local}
+      LUMI_SETUP_TOKEN: ${LUMI_SETUP_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in deploy/.env}
+      # Where the chat links Lumi's source code; empty links Lumi's own repository
+      LUMI_SOURCE_URL: ${LUMI_SOURCE_URL:-}
+      # Optional: Google Workspace admin sign-in (ADMIN_AUTH_PROVIDER=workspace)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ADMIN_ALLOWED_DOMAINS: ${ADMIN_ALLOWED_DOMAINS:-}
+      ADMIN_GOOGLE_GROUP: ${ADMIN_GOOGLE_GROUP:-}
+      GOOGLE_DIRECTORY_CREDENTIALS: ${GOOGLE_DIRECTORY_CREDENTIALS:-}
+      GOOGLE_DIRECTORY_IMPERSONATED_USER: ${GOOGLE_DIRECTORY_IMPERSONATED_USER:-}
+      # Optional: Langfuse tracing
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      LANGFUSE_PROJECT_ID: ${LANGFUSE_PROJECT_ID:-}
+      LANGFUSE_TRACING_ENVIRONMENT: ${LANGFUSE_TRACING_ENVIRONMENT:-production}
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+
+  # The installation's only public entry: TLS, /agents to the agents API, the API and MCP paths to their services, uploads
+  # to the bundled storage, and everything else to the web app
+  proxy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    logging: *logging
+    networks: [default, storage]
+    environment:
+      LUMI_SITE_ADDRESS: ${LUMI_SITE_ADDRESS:?Set LUMI_SITE_ADDRESS in deploy/.env}
+      LUMI_TRUSTED_PROXIES: ${LUMI_TRUSTED_PROXIES:-127.0.0.1/32}
+    ports:
+      - "${LUMI_HTTP_PORT:-80}:80"
+      - "${LUMI_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frontend
+      - agents
+      - mcp
+
+networks:
+  default:
+  # The bundled storage's own network, for the services that use it: SeaweedFS also serves its files on other ports without
+  # the key, so the services that handle visitors' messages, MCP clients and crawled websites (agents, mcp, worker) can't
+  # reach it
+  storage:
+
+volumes:
+  # Lumi's data: business settings, admins, knowledge, conversations, enquiries and usage
+  postgres-data:
+  # Uploaded images, with the bundled storage
+  storage-data:
+  # TLS certificates and keys issued for LUMI_SITE_ADDRESS
+  caddy-data:
+  caddy-config:
