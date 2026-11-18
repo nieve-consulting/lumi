@@ -408,6 +408,7 @@ export default function ResumeSettingsForm({ settings, businessName, websiteUrl 
                           onChange={(value) => {
                             update({ logoUrl: value })
                             setLogoStatus(undefined)
+                            setUploadFailure(undefined)
                           }}
                           errors={errors}
                         />

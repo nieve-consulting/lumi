@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { BusinessSettingsInput } from "@lumi/shared-contracts/business"
 import { Compass, Contact, MessagesSquare, Palette } from "lucide-react"
 
@@ -30,6 +30,7 @@ import {
 
 import { updateBusiness } from "../../actions"
 import { useLeaveWarning } from "../useLeaveWarning"
+import BusinessLogoField from "./BusinessLogoField"
 
 interface IProps {
   // The stored settings, as entered
@@ -78,21 +79,31 @@ export default function BusinessSettingsForm({ settings }: IProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  // Counts saves and discards, which settle what the logo field announced about an upload or a removal
+  const [logoResets, setLogoResets] = useState(0)
   const [failure, setFailure] = useState<Failure>()
 
   const dirty = JSON.stringify(form) !== JSON.stringify(savedForm)
+  const busy = saving || uploading
   const section = SECTIONS.find(({ id }) => id === active) ?? SECTIONS[0]
 
   useLeaveWarning(dirty, "Leave without saving your business settings? Your changes will be lost.")
 
+  // The form as last changed, so a logo upload that finishes after the admin edited other fields keeps their edits
+  const latestForm = useRef(form)
+  useEffect(() => {
+    latestForm.current = form
+  }, [form])
+
   function update(patch: Partial<BusinessForm>) {
-    const next = { ...form, ...patch }
+    const next = { ...latestForm.current, ...patch }
+    latestForm.current = next
     setForm(next)
     // Problems already shown clear as they're fixed
-    if (Object.keys(errors).length) {
-      const current = validateForm(next)
-      setErrors(Object.fromEntries(Object.entries(current).filter(([field]) => field in errors)))
-    }
+    setErrors((shown) =>
+      Object.keys(shown).length ? Object.fromEntries(Object.entries(validateForm(next)).filter(([field]) => field in shown)) : shown
+    )
   }
 
   // Shows the problems and moves focus to the first
@@ -108,7 +119,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
   }
 
   async function save() {
-    if (saving || !dirty) return
+    if (busy || !dirty) return
     setFailure(undefined)
     const problems = validateForm(form)
     if (Object.keys(problems).length) return showProblems(problems)
@@ -119,6 +130,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
       if (result.ok) {
         setErrors({})
         setSavedForm(form)
+        setLogoResets((count) => count + 1)
         toast({ title: "Business settings saved", description: "The chat shows them from its next visit." })
       } else if ("problems" in result) {
         showProblems(errorsFromProblems(result.problems))
@@ -208,7 +220,21 @@ export default function BusinessSettingsForm({ settings }: IProps) {
                 <div className="grid items-start gap-6 lg:grid-cols-2">
                   <div className="space-y-5">
                     <AssistantStepFields form={form} update={update} errors={errors} admin />
-                    <BrandingStepFields form={form} update={update} errors={errors} admin />
+                    <BrandingStepFields
+                      form={form}
+                      update={update}
+                      errors={errors}
+                      admin
+                      logoField={
+                        <BusinessLogoField
+                          resetKey={logoResets}
+                          value={form.logoUrl}
+                          onChange={(logoUrl) => update({ logoUrl })}
+                          onUploadingChange={setUploading}
+                          errors={errors}
+                        />
+                      }
+                    />
                   </div>
                   <AppearancePreview form={form} />
                 </div>
@@ -247,7 +273,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-4px_12px_rgb(0_0_0/0.03)]">
         <div>
           <p role="status" className="text-sm font-medium">
-            {saving ? "Saving changes…" : dirty ? "Unsaved changes" : "All changes saved"}
+            {saving ? "Saving changes…" : uploading ? "Uploading the logo…" : dirty ? "Unsaved changes" : "All changes saved"}
           </p>
           <p className="text-xs text-slate-600">Changes apply to new chat visits.</p>
         </div>
@@ -255,16 +281,17 @@ export default function BusinessSettingsForm({ settings }: IProps) {
           <Button
             type="button"
             variant="outline"
-            disabled={saving || !dirty}
+            disabled={busy || !dirty}
             onClick={() => {
               setForm(savedForm)
               setErrors({})
               setFailure(undefined)
+              setLogoResets((count) => count + 1)
             }}
           >
             Discard
           </Button>
-          <Button type="submit" disabled={saving || !dirty}>
+          <Button type="submit" disabled={busy || !dirty}>
             {saving ? "Saving…" : "Save changes"}
           </Button>
         </div>
