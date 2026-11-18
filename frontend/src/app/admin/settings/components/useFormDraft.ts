@@ -20,9 +20,7 @@ export function useFormDraft<T extends object>(initial: () => T, validate: (form
   function update(patch: Partial<T>) {
     const next = { ...latest.current, ...patch }
     setForm(next)
-    setErrors((shown) =>
-      Object.keys(shown).length ? Object.fromEntries(Object.entries(validate(next)).filter(([field]) => field in shown)) : shown
-    )
+    setErrors((shown) => (Object.keys(shown).length ? Object.fromEntries(Object.entries(validate(next)).filter(([field]) => field in shown)) : shown))
   }
 
   return { form, setForm, update, errors, setErrors }

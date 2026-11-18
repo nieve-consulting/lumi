@@ -7,8 +7,8 @@ import { greeting } from "@lumi/shared-contracts/pre-sales"
 import { MessageCircle } from "lucide-react"
 
 import { DEFAULT_AVATAR_URL, DEFAULT_PRIMARY_COLOR } from "@/lib/businessSettings"
-import { sizedImage } from "@/lib/mediaImage"
 import { getMessages } from "@/lib/i18n"
+import { sizedImage } from "@/lib/mediaImage"
 
 import type { BusinessForm } from "./form"
 
