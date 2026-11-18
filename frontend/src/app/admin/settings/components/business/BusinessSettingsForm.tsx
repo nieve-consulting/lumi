@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import type { BusinessSettingsInput } from "@lumi/shared-contracts/business"
 import { Compass, Contact, MessagesSquare, Palette } from "lucide-react"
 
@@ -29,8 +29,9 @@ import {
 } from "@/components/BusinessSettings/steps"
 
 import { updateBusiness } from "../../actions"
+import LogoUploadField, { useLogoUpload } from "../LogoUploadField"
+import { useFormDraft } from "../useFormDraft"
 import { useLeaveWarning } from "../useLeaveWarning"
-import BusinessLogoField from "./BusinessLogoField"
 
 interface IProps {
   // The stored settings, as entered
@@ -68,43 +69,37 @@ const SECTIONS = [
   },
 ] as const
 
+// The About dialog shows the logo 35 pixels tall after "<assistant> by", on white
+const LOGO_TIPS =
+  "Shown in the chat's About dialog, about 35 pixels tall on a white background. A wide logo with little margin reads best. Without one, the dialog shows your business name. Resumes have their own logo, in Settings → Resumes."
+
+const LOGO_HINT = `${LOGO_TIPS} Upload a JPEG, PNG, WebP, GIF or AVIF image, or enter its https address or a path on this site starting with /.`
+
+const UPLOADED_LOGO_HINT = `${LOGO_TIPS} To use an image address instead, remove this logo.`
+
 // Why the last save failed: the installation isn't set up yet (NOT_SET_UP), or a message to show
 type Failure = { kind: "notSetUp" } | { kind: "error"; message: string }
 
 export default function BusinessSettingsForm({ settings }: IProps) {
   const { toast } = useToast()
-  const [form, setForm] = useState<BusinessForm>(() => formFromSettings(settings))
+  const { form, setForm, update, errors, setErrors } = useFormDraft<BusinessForm>(() => formFromSettings(settings), validateForm)
   const [savedForm, setSavedForm] = useState(() => formFromSettings(settings))
   const [active, setActive] = useState<string>("business")
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const [errors, setErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  // Counts saves and discards, which settle what the logo field announced about an upload or a removal
-  const [logoResets, setLogoResets] = useState(0)
   const [failure, setFailure] = useState<Failure>()
+  const logo = useLogoUpload({
+    what: "logo",
+    uploadedMessage: "Logo uploaded. Save to show it in the chat.",
+    onUploaded: (logoUrl) => update({ logoUrl }),
+  })
 
   const dirty = JSON.stringify(form) !== JSON.stringify(savedForm)
-  const busy = saving || uploading
+  const busy = saving || logo.uploading
   const section = SECTIONS.find(({ id }) => id === active) ?? SECTIONS[0]
 
-  useLeaveWarning(dirty, "Leave without saving your business settings? Your changes will be lost.")
-
-  // The form as last changed, so a logo upload that finishes after the admin edited other fields keeps their edits
-  const latestForm = useRef(form)
-  useEffect(() => {
-    latestForm.current = form
-  }, [form])
-
-  function update(patch: Partial<BusinessForm>) {
-    const next = { ...latestForm.current, ...patch }
-    latestForm.current = next
-    setForm(next)
-    // Problems already shown clear as they're fixed
-    setErrors((shown) =>
-      Object.keys(shown).length ? Object.fromEntries(Object.entries(validateForm(next)).filter(([field]) => field in shown)) : shown
-    )
-  }
+  // A logo still uploading would be lost too
+  useLeaveWarning(dirty || logo.uploading, "Leave without saving your business settings? Your changes will be lost.")
 
   // Shows the problems and moves focus to the first
   function showProblems(problems: FieldErrors) {
@@ -130,7 +125,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
       if (result.ok) {
         setErrors({})
         setSavedForm(form)
-        setLogoResets((count) => count + 1)
+        logo.saved()
         toast({ title: "Business settings saved", description: "The chat shows them from its next visit." })
       } else if ("problems" in result) {
         showProblems(errorsFromProblems(result.problems))
@@ -226,12 +221,19 @@ export default function BusinessSettingsForm({ settings }: IProps) {
                       errors={errors}
                       admin
                       logoField={
-                        <BusinessLogoField
-                          resetKey={logoResets}
+                        <LogoUploadField
+                          label="Logo"
+                          alt="Uploaded logo"
+                          hint={LOGO_HINT}
+                          uploadedHint={UPLOADED_LOGO_HINT}
+                          placeholder="https://www.example.com/logo.png"
                           value={form.logoUrl}
                           onChange={(logoUrl) => update({ logoUrl })}
-                          onUploadingChange={setUploading}
                           errors={errors}
+                          logo={logo}
+                          disabled={busy}
+                          background="#ffffff"
+                          height={35}
                         />
                       }
                     />
@@ -273,7 +275,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-4px_12px_rgb(0_0_0/0.03)]">
         <div>
           <p role="status" className="text-sm font-medium">
-            {saving ? "Saving changes…" : uploading ? "Uploading the logo…" : dirty ? "Unsaved changes" : "All changes saved"}
+            {saving ? "Saving changes…" : dirty ? "Unsaved changes" : "All changes saved"}
           </p>
           <p className="text-xs text-slate-600">Changes apply to new chat visits.</p>
         </div>
@@ -286,7 +288,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
               setForm(savedForm)
               setErrors({})
               setFailure(undefined)
-              setLogoResets((count) => count + 1)
+              logo.discarded()
             }}
           >
             Discard

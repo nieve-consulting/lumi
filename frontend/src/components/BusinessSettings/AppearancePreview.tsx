@@ -7,11 +7,13 @@ import { greeting } from "@lumi/shared-contracts/pre-sales"
 import { MessageCircle } from "lucide-react"
 
 import { DEFAULT_AVATAR_URL, DEFAULT_PRIMARY_COLOR } from "@/lib/businessSettings"
+import { sizedImage } from "@/lib/mediaImage"
 import { getMessages } from "@/lib/i18n"
 
 import type { BusinessForm } from "./form"
 
-function PreviewImage({ source, alt, round = false }: { source: string; alt: string; round?: boolean }) {
+// An image as the chat shows it: square, or, for the logo, 35 pixels tall at its own width as in the About dialog
+function PreviewImage({ source, alt, round = false, logo = false }: { source: string; alt: string; round?: boolean; logo?: boolean }) {
   const [failedSource, setFailedSource] = useState<string>()
   if (!isImageUrl(source) || failedSource === source) {
     return <span className="flex size-12 items-center justify-center rounded-md bg-slate-100 text-xs text-slate-600">No image</span>
@@ -19,11 +21,11 @@ function PreviewImage({ source, alt, round = false }: { source: string; alt: str
   return (
     <Image
       unoptimized
-      src={source}
+      src={sizedImage(source, logo ? 35 : 48)}
       alt={alt}
-      width={48}
-      height={48}
-      className={`size-12 object-contain ${round ? "rounded-full" : "rounded-md"}`}
+      width={logo ? 140 : 48}
+      height={logo ? 35 : 48}
+      className={logo ? "h-[35px] w-auto max-w-40 object-contain" : `size-12 object-contain ${round ? "rounded-full" : "rounded-md"}`}
       onError={() => setFailedSource(source)}
     />
   )
@@ -80,7 +82,10 @@ export default function AppearancePreview({ form }: { form: BusinessForm }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {form.logoUrl.trim() ? (
-            <PreviewImage source={form.logoUrl.trim()} alt="Business logo preview" />
+            // On white, as the About dialog shows it
+            <span className="rounded-md bg-white px-2 py-1">
+              <PreviewImage source={form.logoUrl.trim()} alt="Business logo preview" logo />
+            </span>
           ) : (
             <span className="text-xs text-slate-600">No business logo</span>
           )}

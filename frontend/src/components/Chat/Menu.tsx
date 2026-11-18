@@ -6,6 +6,7 @@ import { LANGUAGE_NAMES, LANGUAGES } from "@lumi/shared-contracts/language"
 import { EllipsisVertical, Info, Languages, MessageCircle } from "lucide-react"
 
 import { useBusiness } from "@/lib/BusinessProvider"
+import { sizedImage } from "@/lib/mediaImage"
 import { useI18n } from "@/lib/i18n/LanguageProvider"
 import {
   AlertDialog,
@@ -97,7 +98,7 @@ export default function Menu({ ref, version, commitId }: IProps) {
             <AlertDialogTitle className="text-center">
               {t.about.titleBy}{" "}
               {logoUrl ? (
-                <Image src={logoUrl} width={60} height={60} alt={businessName} className="inline-block h-[35px] w-auto align-middle" />
+                <Image src={sizedImage(logoUrl, 35)} width={60} height={60} alt={businessName} className="inline-block h-[35px] w-auto align-middle" />
               ) : (
                 businessName
               )}
