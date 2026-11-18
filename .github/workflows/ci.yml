@@ -130,3 +130,14 @@ jobs:
 
       - name: Validate Compose with the example settings
         run: docker compose --env-file deploy/.env.example -f deploy/compose.yaml config --quiet
+
+  # The one check main requires: it passes when every check that ran passed, whichever workspaces changed
+  result:
+    name: CI result
+    needs: [changes, checks, compose]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if a check failed or was cancelled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
