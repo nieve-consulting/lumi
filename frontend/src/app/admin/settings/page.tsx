@@ -333,7 +333,9 @@ async function BusinessTab() {
       </p>
     )
   }
-  return <BusinessSettingsForm key={settings.updatedAt} settings={settingsFromGraphQL(settings)} />
+  // Not keyed by updatedAt like the other settings forms: a save re-renders the page with a new updatedAt, and remounting the
+  // form would send the admin back to its first section and lose their focus. The form keeps what it saved as the saved state
+  return <BusinessSettingsForm settings={settingsFromGraphQL(settings)} />
 }
 
 async function HandoffTab() {

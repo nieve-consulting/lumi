@@ -1,10 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import type { ResumeSettings } from "@/generated/graphql"
 import { contrastRatio, parseHexColor } from "@lumi/shared-contracts/business"
-import { isUploadImageType, UPLOAD_IMAGE_TYPES } from "@lumi/shared-contracts/media"
 import {
   DEFAULT_RESUME_COLORS,
   fadeAdvice,
@@ -15,7 +14,7 @@ import {
   MIN_RESUME_CONTRAST,
   readableTextColor,
 } from "@lumi/shared-contracts/resume"
-import { FileText, ImageUp, Palette, Trash2 } from "lucide-react"
+import { FileText, Palette } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,8 +23,9 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
 import { CompactFieldsContext, describedBy, FieldError, FieldHint, FieldLabel, TextField } from "@/components/BusinessSettings/fields"
 import { fieldId, type FieldErrors } from "@/components/BusinessSettings/form"
-import { MediaStorageNotConfiguredError, uploadImage } from "@/app/admin/uploads"
 
+import LogoUploadField, { useLogoUpload } from "../LogoUploadField"
+import { useFormDraft } from "../useFormDraft"
 import { useLeaveWarning } from "../useLeaveWarning"
 import { updateResumes } from "./actions"
 import { displayUrl, errorsByField, formFromSettings, settingsFromForm, STYLE_FIELDS, validateForm, type ResumeForm } from "./form"
@@ -160,40 +160,24 @@ interface IProps {
 
 export default function ResumeSettingsForm({ settings, businessName, websiteUrl }: IProps) {
   const { toast } = useToast()
-  const [form, setForm] = useState(() => formFromSettings(settings))
+  const { form, setForm, update, errors, setErrors } = useFormDraft<ResumeForm>(() => formFromSettings(settings), validateForm)
   const [savedForm, setSavedForm] = useState(() => formFromSettings(settings))
   const [saved, setSaved] = useState(Boolean(settings.updatedAt))
-  const [errors, setErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [uploadFailure, setUploadFailure] = useState<string>()
-  // What happened to the logo since the last save, announced: uploaded or removed
-  const [logoStatus, setLogoStatus] = useState<string>()
   const [failure, setFailure] = useState<string>()
-  const fileInput = useRef<HTMLInputElement>(null)
+  const logo = useLogoUpload({
+    what: "resume logo",
+    uploadedMessage: "Logo uploaded. Save to use it on resumes.",
+    onUploaded: (logoUrl) => update({ logoUrl }),
+  })
 
   const dirty = JSON.stringify(form) !== JSON.stringify(savedForm)
-  const busy = saving || uploading
+  const busy = saving || logo.uploading
   // Problems with the styling show even while resumes are off, as they're checked then too
   const showStyle = form.enabled || STYLE_FIELDS.some((field) => errors[field])
 
-  useLeaveWarning(dirty, "Leave without saving your resume settings? Your changes will be lost.")
-
-  // The form as last changed, so a logo upload that finishes after the admin edited other fields keeps their edits
-  const latestForm = useRef(form)
-  useEffect(() => {
-    latestForm.current = form
-  }, [form])
-
-  function update(patch: Partial<ResumeForm>) {
-    const next = { ...latestForm.current, ...patch }
-    latestForm.current = next
-    setForm(next)
-    // Problems already shown clear as they're fixed
-    setErrors((shown) =>
-      Object.keys(shown).length ? Object.fromEntries(Object.entries(validateForm(next)).filter(([field]) => field in shown)) : shown
-    )
-  }
+  // A logo still uploading would be lost too
+  useLeaveWarning(dirty || logo.uploading, "Leave without saving your resume settings? Your changes will be lost.")
 
   // Shows the problems and moves focus to the first
   function showProblems(problems: FieldErrors) {
@@ -201,34 +185,6 @@ export default function ResumeSettingsForm({ settings, businessName, websiteUrl 
     const [first] = Object.keys(problems)
     // After rendering, so the field's error is there to be read with it
     if (first) requestAnimationFrame(() => document.getElementById(fieldId(first))?.focus())
-  }
-
-  async function uploadLogo(file: File) {
-    setUploadFailure(undefined)
-    setLogoStatus(undefined)
-    if (!isUploadImageType(file.type)) {
-      setUploadFailure("Upload a JPEG, PNG, WebP, GIF or AVIF image, or enter the logo's https address.")
-      if (fileInput.current) fileInput.current.value = ""
-      return
-    }
-    setUploading(true)
-    try {
-      const key = await uploadImage(file, "resume logo")
-      update({ logoUrl: `/media/${key}` })
-      setLogoStatus("Logo uploaded. Save to use it on resumes.")
-    } catch (error) {
-      setUploadFailure(
-        error instanceof MediaStorageNotConfiguredError
-          ? "Logos can't be uploaded because media storage isn't set up for this Lumi installation. Enter the logo's https address instead, or ask whoever set up Lumi to set up media storage."
-          : error instanceof Error
-            ? error.message
-            : "The resume logo couldn't be uploaded. Try again."
-      )
-    } finally {
-      setUploading(false)
-      // The same file can be picked again after a failure
-      if (fileInput.current) fileInput.current.value = ""
-    }
   }
 
   async function save() {
@@ -246,7 +202,7 @@ export default function ResumeSettingsForm({ settings, businessName, websiteUrl 
         setSavedForm(next)
         setSaved(true)
         setErrors({})
-        setLogoStatus(undefined)
+        logo.saved()
         toast({
           title: "Resume settings saved",
           description: next.enabled ? "New resumes use them right away." : "Lumi no longer offers resumes.",
@@ -300,8 +256,6 @@ export default function ResumeSettingsForm({ settings, businessName, websiteUrl 
   const showGradient = Boolean(footerText) || Boolean(errors.gradientColor)
 
   const problemCount = Object.keys(errors).length
-  // An image uploaded here, which the web app serves at /media/<key>, rather than an address the admin entered
-  const uploadedLogo = logoUrl.startsWith("/media/")
 
   return (
     <form
@@ -370,90 +324,20 @@ export default function ResumeSettingsForm({ settings, businessName, websiteUrl 
               <div className="grid items-start gap-6 lg:grid-cols-2">
                 <div className="min-w-0 space-y-8">
                   <SettingsGroup id="resumes-header" title="Header" description="The band at the top of every page.">
-                    {/* With an uploaded logo the image, its hint and its buttons read as one labelled group */}
-                    <div
-                      className="space-y-3"
-                      {...(uploadedLogo && {
-                        role: "group",
-                        "aria-labelledby": fieldId("logoUrl"),
-                        "aria-describedby": describedBy("logoUrl", errors, UPLOADED_LOGO_HINT),
-                      })}
-                    >
-                      {uploadedLogo ? (
-                        // An uploaded logo shows as the image, on the header colour it sits on; an address the admin entered stays
-                        // editable as text
-                        <div className="space-y-2">
-                          {/* Focusable, so a save that finds a problem with the logo can take the admin to it */}
-                          <p id={fieldId("logoUrl")} tabIndex={-1} className="text-sm leading-none font-medium">
-                            Resume logo
-                          </p>
-                          <FieldHint field="logoUrl">{UPLOADED_LOGO_HINT}</FieldHint>
-                          <div
-                            className="flex h-20 w-full max-w-xs items-center justify-center rounded-md border border-slate-200 px-3"
-                            style={{ backgroundColor: headerColor === "invalid" ? DEFAULT_RESUME_COLORS.header : headerColor }}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element -- an upload served by the web app's /media route */}
-                            <img src={logoUrl} alt="Uploaded resume logo" className="h-16 max-w-full object-contain" />
-                          </div>
-                          <FieldError field="logoUrl" errors={errors} />
-                        </div>
-                      ) : (
-                        <TextField
-                          field="logoUrl"
-                          label="Resume logo"
-                          hint={LOGO_HINT}
-                          type="url"
-                          placeholder="https://www.example.com/resume-logo.png"
-                          value={form.logoUrl}
-                          onChange={(value) => {
-                            update({ logoUrl: value })
-                            setLogoStatus(undefined)
-                          }}
-                          errors={errors}
-                        />
-                      )}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          ref={fileInput}
-                          type="file"
-                          accept={UPLOAD_IMAGE_TYPES.join(",")}
-                          className="sr-only"
-                          tabIndex={-1}
-                          aria-hidden
-                          onChange={(event) => {
-                            const file = event.target.files?.[0]
-                            if (file) uploadLogo(file)
-                          }}
-                        />
-                        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => fileInput.current?.click()}>
-                          <ImageUp aria-hidden />
-                          {uploading ? "Uploading…" : logoUrl ? "Upload a new logo" : "Upload a logo"}
-                        </Button>
-                        {logoUrl && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => {
-                              update({ logoUrl: "" })
-                              setLogoStatus("Logo removed. Save to show your business name instead.")
-                              requestAnimationFrame(() => document.getElementById(fieldId("logoUrl"))?.focus())
-                            }}
-                          >
-                            <Trash2 aria-hidden /> Remove logo
-                          </Button>
-                        )}
-                      </div>
-                      <p role="status" className="text-sm text-slate-600">
-                        {uploading ? "Uploading the logo…" : logoStatus}
-                      </p>
-                      {uploadFailure && (
-                        <p role="alert" className="text-sm font-medium text-red-700">
-                          {uploadFailure}
-                        </p>
-                      )}
-                    </div>
+                    <LogoUploadField
+                      label="Resume logo"
+                      alt="Uploaded resume logo"
+                      hint={LOGO_HINT}
+                      uploadedHint={UPLOADED_LOGO_HINT}
+                      placeholder="https://www.example.com/resume-logo.png"
+                      value={form.logoUrl}
+                      onChange={(value) => update({ logoUrl: value })}
+                      errors={errors}
+                      logo={logo}
+                      disabled={busy}
+                      background={headerColor === "invalid" ? DEFAULT_RESUME_COLORS.header : headerColor}
+                      height={64}
+                    />
                     <ColorField
                       field="headerColor"
                       label="Band colour"
@@ -533,8 +417,7 @@ export default function ResumeSettingsForm({ settings, businessName, websiteUrl 
               setForm(savedForm)
               setErrors({})
               setFailure(undefined)
-              setUploadFailure(undefined)
-              setLogoStatus(undefined)
+              logo.discarded()
             }}
           >
             Discard

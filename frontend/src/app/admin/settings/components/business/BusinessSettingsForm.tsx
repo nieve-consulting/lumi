@@ -29,6 +29,8 @@ import {
 } from "@/components/BusinessSettings/steps"
 
 import { updateBusiness } from "../../actions"
+import LogoUploadField, { useLogoUpload } from "../LogoUploadField"
+import { useFormDraft } from "../useFormDraft"
 import { useLeaveWarning } from "../useLeaveWarning"
 
 interface IProps {
@@ -67,33 +69,37 @@ const SECTIONS = [
   },
 ] as const
 
+// The About dialog shows the logo 35 pixels tall after "<assistant> by", on white
+const LOGO_TIPS =
+  "Shown in the chat's About dialog, about 35 pixels tall on a white background. A wide logo with little margin reads best. Without one, the dialog shows your business name. Resumes have their own logo, in Settings → Resumes."
+
+const LOGO_HINT = `${LOGO_TIPS} Upload a JPEG, PNG, WebP, GIF or AVIF image, or enter its https address or a path on this site starting with /.`
+
+const UPLOADED_LOGO_HINT = `${LOGO_TIPS} To use an image address instead, remove this logo.`
+
 // Why the last save failed: the installation isn't set up yet (NOT_SET_UP), or a message to show
 type Failure = { kind: "notSetUp" } | { kind: "error"; message: string }
 
 export default function BusinessSettingsForm({ settings }: IProps) {
   const { toast } = useToast()
-  const [form, setForm] = useState<BusinessForm>(() => formFromSettings(settings))
+  const { form, setForm, update, errors, setErrors } = useFormDraft<BusinessForm>(() => formFromSettings(settings), validateForm)
   const [savedForm, setSavedForm] = useState(() => formFromSettings(settings))
   const [active, setActive] = useState<string>("business")
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const [errors, setErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<Failure>()
+  const logo = useLogoUpload({
+    what: "logo",
+    uploadedMessage: "Logo uploaded. Save to show it in the chat.",
+    onUploaded: (logoUrl) => update({ logoUrl }),
+  })
 
   const dirty = JSON.stringify(form) !== JSON.stringify(savedForm)
+  const busy = saving || logo.uploading
   const section = SECTIONS.find(({ id }) => id === active) ?? SECTIONS[0]
 
-  useLeaveWarning(dirty, "Leave without saving your business settings? Your changes will be lost.")
-
-  function update(patch: Partial<BusinessForm>) {
-    const next = { ...form, ...patch }
-    setForm(next)
-    // Problems already shown clear as they're fixed
-    if (Object.keys(errors).length) {
-      const current = validateForm(next)
-      setErrors(Object.fromEntries(Object.entries(current).filter(([field]) => field in errors)))
-    }
-  }
+  // A logo still uploading would be lost too
+  useLeaveWarning(dirty || logo.uploading, "Leave without saving your business settings? Your changes will be lost.")
 
   // Shows the problems and moves focus to the first
   function showProblems(problems: FieldErrors) {
@@ -108,7 +114,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
   }
 
   async function save() {
-    if (saving || !dirty) return
+    if (busy || !dirty) return
     setFailure(undefined)
     const problems = validateForm(form)
     if (Object.keys(problems).length) return showProblems(problems)
@@ -119,6 +125,7 @@ export default function BusinessSettingsForm({ settings }: IProps) {
       if (result.ok) {
         setErrors({})
         setSavedForm(form)
+        logo.saved()
         toast({ title: "Business settings saved", description: "The chat shows them from its next visit." })
       } else if ("problems" in result) {
         showProblems(errorsFromProblems(result.problems))
@@ -208,7 +215,28 @@ export default function BusinessSettingsForm({ settings }: IProps) {
                 <div className="grid items-start gap-6 lg:grid-cols-2">
                   <div className="space-y-5">
                     <AssistantStepFields form={form} update={update} errors={errors} admin />
-                    <BrandingStepFields form={form} update={update} errors={errors} admin />
+                    <BrandingStepFields
+                      form={form}
+                      update={update}
+                      errors={errors}
+                      admin
+                      logoField={
+                        <LogoUploadField
+                          label="Logo"
+                          alt="Uploaded logo"
+                          hint={LOGO_HINT}
+                          uploadedHint={UPLOADED_LOGO_HINT}
+                          placeholder="https://www.example.com/logo.png"
+                          value={form.logoUrl}
+                          onChange={(logoUrl) => update({ logoUrl })}
+                          errors={errors}
+                          logo={logo}
+                          disabled={busy}
+                          background="#ffffff"
+                          height={35}
+                        />
+                      }
+                    />
                   </div>
                   <AppearancePreview form={form} />
                 </div>
@@ -255,16 +283,17 @@ export default function BusinessSettingsForm({ settings }: IProps) {
           <Button
             type="button"
             variant="outline"
-            disabled={saving || !dirty}
+            disabled={busy || !dirty}
             onClick={() => {
               setForm(savedForm)
               setErrors({})
               setFailure(undefined)
+              logo.discarded()
             }}
           >
             Discard
           </Button>
-          <Button type="submit" disabled={saving || !dirty}>
+          <Button type="submit" disabled={busy || !dirty}>
             {saving ? "Saving…" : "Save changes"}
           </Button>
         </div>

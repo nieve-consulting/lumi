@@ -174,7 +174,8 @@ export function DefaultLanguageField({ form, update, errors }: StepProps) {
   )
 }
 
-export function BrandingStepFields({ form, update, errors, admin }: StepProps) {
+// The admin settings pass their own logo field, which can also upload the logo; the onboarding wizard takes its address
+export function BrandingStepFields({ form, update, errors, admin, logoField }: StepProps & { logoField?: React.ReactNode }) {
   const hex = parseHexColor(form.primaryColor)
   const contrast = hex ? whiteTextContrast(hex) : undefined
   const readable = contrast !== undefined && contrast >= MIN_PRIMARY_CONTRAST
@@ -183,16 +184,18 @@ export function BrandingStepFields({ form, update, errors, admin }: StepProps) {
 
   return (
     <>
-      <TextField
-        field="logoUrl"
-        label="Logo"
-        hint={`Shown in the chat's About dialog. Resumes have their own logo, in Settings → Resumes. ${IMAGE_HINT}`}
-        type="url"
-        placeholder="https://www.example.com/logo.svg"
-        value={form.logoUrl}
-        onChange={(logoUrl) => update({ logoUrl })}
-        errors={errors}
-      />
+      {logoField ?? (
+        <TextField
+          field="logoUrl"
+          label="Logo"
+          hint={`Shown in the chat's About dialog. ${IMAGE_HINT} Or leave it empty and upload one later in Settings → Business identity → Appearance.`}
+          type="url"
+          placeholder="https://www.example.com/logo.svg"
+          value={form.logoUrl}
+          onChange={(logoUrl) => update({ logoUrl })}
+          errors={errors}
+        />
+      )}
       <div className="space-y-2">
         <FieldLabel field={field} label="Primary colour" />
         <FieldHint field={field}>{hint}</FieldHint>
