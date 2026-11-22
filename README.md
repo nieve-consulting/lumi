@@ -14,11 +14,11 @@ Lumi answers your website visitors' questions from your business knowledge, asks
 
 Lumi is for consultancies, agencies, studios, practices and anyone selling expertise. A prospective client arrives with a question, such as "Have you delivered a project like ours?". Lumi looks up the relevant company information, clients and projects, answers, and helps the visitor take the next step.
 
-[Nieve Consulting](https://nieve.ai) builds and maintains Lumi, and runs it on its own website: [try it at chat.lumi.nieve.ai](https://chat.lumi.nieve.ai). Agencies are welcome to adapt it for their clients and to offer implementation or hosting services under the [license](#license).
+[Nieve Consulting](https://www.nieveconsulting.com) builds and maintains Lumi, and runs it on its own website: [try it at chat.lumi.nieve.ai](https://chat.lumi.nieve.ai). Agencies are welcome to adapt it for their clients and to offer implementation or hosting services under the [license](#license).
 
 ## What Lumi does
 
-- **Business knowledge:** answers from your website, with optional team, project, client and job-opening sources; see [Knowledge sources](https://docs.lumi.nieve.ai/configuration/knowledge).
+- **Business knowledge:** answers from your website, with optional team, project, client and job-opening sources; see [Knowledge sources](https://docs.lumi./configuration/knowledge).
 - **Visitor conversations:** streaming responses and persisted conversation state.
 - **Qualification and handoff:** configurable qualification questions, a booking page or in-chat Google Calendar booking, and enquiries delivered by email or webhook; see [Qualification, booking and enquiries](https://docs.lumi.nieve.ai/configuration/handoff).
 - **Embeddable chat:** a launcher for your website that opens the chat in an iframe; see [Embedding the widget](https://docs.lumi.nieve.ai/using-lumi/embedding-the-widget).
