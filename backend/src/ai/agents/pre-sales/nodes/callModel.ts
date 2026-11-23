@@ -6,6 +6,7 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch"
 import { AIMessage, AIMessageChunk, BaseMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages"
 import { RunnableConfig } from "@langchain/core/runnables"
 import type { MessageAnnotation, Reference } from "@lumi/shared-contracts/chat"
+import { isTrackingParameter } from "@lumi/shared-contracts/pre-sales"
 
 import { ensureConfiguration } from "../configuration"
 import { escapeMarkup } from "../messages"
@@ -41,14 +42,29 @@ function latestToolMessages(messages: BaseMessage[]) {
 // reply, often with pages that only loosely match
 const MAX_REFERENCES = 3
 
-// Compares page URLs by site and path, as a website lists the same page with or without www, a trailing slash or a fragment
+// Compares page URLs by site, path and query, as a website lists the same page with or without www, a trailing slash, a fragment
+// or tracking parameters. Other query parameters can name another page (e.g. WordPress's ?p=123), so they count
 function pageKey(url: string) {
   try {
-    const { host, pathname, search } = new URL(url)
+    const { host, pathname, searchParams } = new URL(url)
+    const query = new URLSearchParams([...searchParams].filter(([key]) => !isTrackingParameter(key)))
+    query.sort()
+    const search = query.size ? `?${query}` : ""
     return `${host.toLowerCase().replace(/^www\./, "")}${pathname.replace(/\/+$/, "")}${search}`
   } catch {
     return undefined
   }
+}
+
+// The website searches of the turn so far, in the order they ran, each with its results closest match first. The model answers
+// from every round's results, not only the latest one's, so a search followed by another tool still links its pages
+function searchesThisTurn(messages: BaseMessage[]) {
+  const searches: Reference[][] = []
+  for (let i = messages.length - 1; i >= 0 && !HumanMessage.isInstance(messages[i]); i--) {
+    const message = messages[i]
+    if (ToolMessage.isInstance(message) && message.artifact && "references" in message.artifact) searches.unshift(message.artifact.references)
+  }
+  return searches
 }
 
 // The pages linked under a reply, from each search's results (closest match first). The searches take turns, best match first,
@@ -79,15 +95,10 @@ export const createCallModel = (sources: PreSalesSources) =>
     const configuration = ensureConfiguration(config)
     const toolMessages = latestToolMessages(state.messages)
     const directMessages: string[] = []
-    const searches: Reference[][] = []
 
     for (const { artifact } of toolMessages) {
       if (artifact && "cards" in artifact) {
         additional_kwargs.cards = [...(additional_kwargs.cards ?? []), ...artifact.cards]
-      }
-
-      if (artifact && "references" in artifact) {
-        searches.push(artifact.references)
       }
 
       if (artifact && "directMessage" in artifact) {
@@ -95,8 +106,10 @@ export const createCallModel = (sources: PreSalesSources) =>
       }
     }
 
-    const references = replyReferences(searches, configuration.pageUrl)
-    if (references.length) additional_kwargs.references = references
+    // Set even when every page was left out: the chat merges each round's annotation into the reply as it streams, so an empty
+    // list replaces an earlier round's pages rather than leaving them under a reply that, once reloaded, has none
+    const searches = searchesThisTurn(state.messages)
+    if (searches.length) additional_kwargs.references = replyReferences(searches, configuration.pageUrl)
 
     let response: AIMessageChunk | undefined = undefined
 

@@ -129,8 +129,21 @@ const MAX_PAGE_URL_INPUT_LENGTH = 16384
 const CAMPAIGN_PARAMETERS = new Set(["utm_source", "utm_medium", "utm_campaign", "utm_id"])
 
 // Parameters that only track the visit, for analytics or ads, and never change what the page shows
-const TRACKING_PARAMETERS = new Set(["gclid", "gbraid", "wbraid", "dclid", "fbclid", "msclkid", "twclid", "li_fat_id", "mc_cid", "mc_eid", "_ga", "_gl"])
-const isTrackingParameter = (key: string) => {
+const TRACKING_PARAMETERS = new Set([
+  "gclid",
+  "gbraid",
+  "wbraid",
+  "dclid",
+  "fbclid",
+  "msclkid",
+  "twclid",
+  "li_fat_id",
+  "mc_cid",
+  "mc_eid",
+  "_ga",
+  "_gl",
+])
+export const isTrackingParameter = (key: string) => {
   const name = key.toLowerCase()
   return TRACKING_PARAMETERS.has(name) || name.startsWith("utm_") || name.startsWith("hsa_") || name.startsWith("_hs")
 }
