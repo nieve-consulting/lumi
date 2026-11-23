@@ -6,4 +6,4 @@ Next.js/React app with public chat, the `/widget` iframe page and the admin inte
 - Coordinate API changes with the backend owner and shared chat/request schemas in `packages/shared-contracts`.
 - For GraphQL type refreshes, follow [backend/AGENTS.md](../backend/AGENTS.md#graphql-codegen); never edit `src/generated/` by hand.
 - The launcher belongs to `widget/`; changes to the iframe interface may require both workspaces. `public/scripts/` receives the widget bundle through its build process.
-- Run `pnpm -C frontend lint` and `pnpm -C frontend typecheck`, and manually verify affected flows. Route user-visible changes through the root guide's UX review step.
+- Run `pnpm -C frontend lint`, `pnpm -C frontend typecheck` and `pnpm -C frontend format:check`, and manually verify affected flows. Route user-visible changes through the root guide's UX review step.

@@ -20,7 +20,7 @@ Read the guide for the area you change; keep detailed rules there rather than re
 - Use pnpm for `frontend`, `backend` and `packages/*`. The separate `widget` package uses `npm --prefix widget run <script>`.
 - No tests for now: do not add tests or test frameworks, or run tests.
 - Inspect scripts before executing them; restrictions also apply to indirect execution. Never apply database or checkpointer migrations. Never hand-edit migrations or generated GraphQL files; follow the generation procedures in [backend/AGENTS.md](backend/AGENTS.md).
-- Run `lint` and `typecheck` in every changed workspace, plus relevant manual verification. For `packages/shared-contracts`, run its `typecheck` and both consumers' lint/typecheck; it has no lint script. Use the workspace's package manager above.
+- Run `lint`, `typecheck` and `format:check` in every changed workspace, plus relevant manual verification; CI fails on unformatted code, and `format` fixes it. For `packages/shared-contracts`, run its `typecheck` and `format:check` and both consumers' lint/typecheck; it has no lint script. Use the workspace's package manager above.
 - Migration and codegen restrictions govern edits, not reviews: generated files in a PR are expected, not violations.
 - User-facing changes come with a matching docs update in lumi-docs: open a companion pull request there and link the two. READMEs keep contributor material only; installation, configuration and setup guides live in the docs, and READMEs link to them.
 - Use Conventional Commits: `type(scope): summary`, with the affected workspace as scope where applicable.
