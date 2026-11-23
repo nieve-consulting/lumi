@@ -20,4 +20,4 @@ Never edit `backend/src/generated/` or `frontend/src/generated/` by hand. In del
 
 ## Verification
 
-Run `pnpm -C backend lint` and `pnpm -C backend typecheck`, plus relevant manual verification. Report codegen performed and any generated migration awaiting the developer. Root review exceptions and the no-tests rule apply.
+Run `pnpm -C backend lint`, `pnpm -C backend typecheck` and `pnpm -C backend format:check`, plus relevant manual verification. Report codegen performed and any generated migration awaiting the developer. Root review exceptions and the no-tests rule apply.

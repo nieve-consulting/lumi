@@ -62,7 +62,8 @@ export const es = ({ assistantName, businessName }: MessageBrand): Messages => (
     startingChat: "Iniciando la conversación...",
     closed: "La conversación está cerrada",
     startNew: "Empezar una nueva conversación",
-    learnMore: "Más información:",
+    relatedPages: (count) => `Páginas relacionadas (${count})`,
+    opensInNewTab: "(se abre en una pestaña nueva)",
     unknownCard: (cardType) => `Tarjeta desconocida: ${cardType}`,
   },
   scrollButton: {

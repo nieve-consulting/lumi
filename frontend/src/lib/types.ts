@@ -6,7 +6,7 @@ export enum LoadingState {
   Error,
 }
 
-export type { Card, LumiDataTypes, LumiMessage, MessageAnnotation } from "@lumi/shared-contracts/chat"
+export type { Card, LumiDataTypes, LumiMessage, MessageAnnotation, Reference } from "@lumi/shared-contracts/chat"
 
 export function getMessageText(message: Pick<UIMessage, "parts">): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("")

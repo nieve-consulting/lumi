@@ -4,11 +4,12 @@ import Image from "next/image"
 import type { Client, TeamMember } from "@/generated/graphql"
 import type { HandoffCardPayload } from "@lumi/shared-contracts/handoff"
 import type { JobOpeningCard } from "@lumi/shared-contracts/knowledge"
-import { ExternalLink, Globe } from "lucide-react"
+import { ChevronDown, ExternalLink, Globe } from "lucide-react"
 
 import { useBusiness } from "@/lib/BusinessProvider"
 import { useI18n } from "@/lib/i18n/LanguageProvider"
-import { getMessageText, type Card, type LumiMessage } from "@/lib/types"
+import { getMessageText, type Card, type LumiMessage, type Reference } from "@/lib/types"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import LumiMarkdown from "@/components/LumiMarkdown"
 
 import ClientCard from "./customCards/ClientCard"
@@ -58,6 +59,44 @@ function MessageCards({ cards }: { cards: Card[] }) {
   )
 }
 
+// The website pages a reply's searches matched best, collapsed to one line so they don't crowd the conversation. Long titles
+// stay on one line. outline-hidden rather than outline-none keeps focus visible in forced-colors mode, which hides the ring
+function RelatedPages({ references }: { references: Reference[] }) {
+  const { t } = useI18n()
+
+  return (
+    <Collapsible className="mt-1 text-xs text-slate-500">
+      <CollapsibleTrigger className="group focus-visible:ring-ring inline-flex items-center gap-1 rounded py-1 outline-hidden hover:text-slate-700 hover:underline focus-visible:ring-2">
+        {t.messages.relatedPages(references.length)}
+        <ChevronDown size={14} aria-hidden className="transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="flex flex-col pb-1">
+          {references.map((reference, idx) => (
+            <li key={idx} className="flex min-w-0 items-center gap-1.5">
+              <Globe size={13} aria-hidden className="shrink-0" />
+              {/* The pages are the business's own, so the referrer is kept for its analytics. The full title shows on hover over
+                  the text rather than the link, so screen readers don't read it again as the link's description */}
+              <a
+                target="_blank"
+                rel="noopener"
+                href={reference.url}
+                className="focus-visible:ring-ring flex min-w-0 items-center gap-1 rounded py-1 outline-hidden hover:text-slate-700 hover:underline focus-visible:ring-2"
+              >
+                <span className="truncate" title={reference.title}>
+                  {reference.title}
+                </span>
+                <ExternalLink size={11} aria-hidden className="shrink-0" />
+                <span className="sr-only">{t.messages.opensInNewTab}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 interface IProps {
   ref?: React.Ref<HTMLDivElement>
   tabIndex?: number
@@ -66,7 +105,6 @@ interface IProps {
 }
 
 export default function AssistantMessage({ ref, tabIndex, message, isStreaming }: IProps) {
-  const { t } = useI18n()
   const { avatar, assistantName } = useBusiness()
   const messageAnnotation = message.metadata
 
@@ -81,21 +119,7 @@ export default function AssistantMessage({ ref, tabIndex, message, isStreaming }
           </LumiMarkdown>
         </div>
         {messageAnnotation?.cards && <MessageCards cards={messageAnnotation.cards} />}
-        {messageAnnotation?.references && (
-          <div className="mt-2 text-xs text-slate-400">
-            {t.messages.learnMore}
-            <ul>
-              {messageAnnotation.references.map((reference, idx) => (
-                <li key={idx} className="my-1 list-none">
-                  <Globe className="mr-2 inline-block" size={15} />
-                  <a target="_references" href={reference.url} className="hover:underline">
-                    {reference.title} <ExternalLink className="inline-block" size={11} />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {!!messageAnnotation?.references?.length && <RelatedPages references={messageAnnotation.references} />}
       </div>
     </div>
   )
