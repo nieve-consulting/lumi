@@ -75,7 +75,8 @@ function MessageSources({ references }: { references: Reference[] }) {
             <li key={idx} className="flex min-w-0 items-center gap-1.5">
               <Globe size={13} aria-hidden className="shrink-0" />
               <a
-                target="_references"
+                target="_blank"
+                rel="noopener noreferrer"
                 href={reference.url}
                 title={reference.title}
                 className="focus-visible:ring-ring flex min-w-0 items-center gap-1 rounded py-1 outline-none hover:text-slate-700 hover:underline focus-visible:ring-2"
