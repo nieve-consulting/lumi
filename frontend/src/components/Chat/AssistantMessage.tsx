@@ -9,8 +9,8 @@ import { ChevronDown, ExternalLink, Globe } from "lucide-react"
 import { useBusiness } from "@/lib/BusinessProvider"
 import { useI18n } from "@/lib/i18n/LanguageProvider"
 import { getMessageText, type Card, type LumiMessage, type Reference } from "@/lib/types"
-import LumiMarkdown from "@/components/LumiMarkdown"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import LumiMarkdown from "@/components/LumiMarkdown"
 
 import ClientCard from "./customCards/ClientCard"
 import ErrorCard from "./customCards/ErrorCard"
@@ -65,7 +65,7 @@ function MessageSources({ references }: { references: Reference[] }) {
 
   return (
     <Collapsible className="mt-1 text-xs text-slate-500">
-      <CollapsibleTrigger className="group inline-flex items-center gap-1 rounded py-1 outline-none hover:text-slate-700 hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+      <CollapsibleTrigger className="group focus-visible:ring-ring inline-flex items-center gap-1 rounded py-1 outline-none hover:text-slate-700 hover:underline focus-visible:ring-2">
         {t.messages.sources(references.length)}
         <ChevronDown size={14} aria-hidden className="transition-transform group-data-[state=open]:rotate-180" />
       </CollapsibleTrigger>
@@ -74,7 +74,12 @@ function MessageSources({ references }: { references: Reference[] }) {
           {references.map((reference, idx) => (
             <li key={idx} className="flex min-w-0 items-center gap-1.5">
               <Globe size={13} aria-hidden className="shrink-0" />
-              <a target="_references" href={reference.url} title={reference.title} className="flex min-w-0 items-center gap-1 rounded py-1 outline-none hover:text-slate-700 hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+              <a
+                target="_references"
+                href={reference.url}
+                title={reference.title}
+                className="focus-visible:ring-ring flex min-w-0 items-center gap-1 rounded py-1 outline-none hover:text-slate-700 hover:underline focus-visible:ring-2"
+              >
                 <span className="truncate">{reference.title}</span>
                 <ExternalLink size={11} aria-hidden className="shrink-0" />
                 <span className="sr-only">{t.messages.opensInNewTab}</span>
