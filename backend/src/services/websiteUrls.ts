@@ -30,10 +30,14 @@ export function pageUrlOf(websiteUrl: string, path: string) {
   }
 }
 
+// A host as the site it belongs to: lowercase and without www
+export function siteHost(host: string) {
+  return host.toLowerCase().replace(/^www\./, "")
+}
+
 // Whether two hosts are the same site, with or without www, as a website's sitemap often lists its pages on the other one
 export function sameSite(host: string, other: string) {
-  const site = (value: string) => value.toLowerCase().replace(/^www\./, "")
-  return site(host) === site(other)
+  return siteHost(host) === siteHost(other)
 }
 
 // Whether a page is on one of the given sites, by host as sameSite compares them. Sites that aren't valid URLs match nothing

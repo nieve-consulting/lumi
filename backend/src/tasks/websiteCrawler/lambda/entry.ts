@@ -287,7 +287,7 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
               }
 
               let html: string
-              let pageUrl: string
+              let pageUrl: URL
               try {
                 const fetched = await safeFetch(loc, { ...FETCH_LIMITS, contentTypes: PAGE_CONTENT_TYPES, accept: PAGE_ACCEPT })
                 const finalUrl = URL.parse(fetched.url)
@@ -307,7 +307,7 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
                   continue
                 }
                 html = fetched.body
-                pageUrl = fetched.url
+                pageUrl = finalUrl
               } catch (error) {
                 const outcome = pageFetchOutcome(error)
                 if (!outcome) throw new CrawlFailure(`Page ${path} couldn't be loaded: ${reasonOf(error)}`, { cause: error })
@@ -337,7 +337,7 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
                 .join("\n")
                 .trim()
               const contentHash = createHash("sha256").update(text).digest("hex")
-              const { language, translationKey } = readPageLanguage({ path, url: pageUrl, ...loader.getLanguageTags() })
+              const { language, translationKey } = readPageLanguage({ listedUrl: new URL(loc), url: pageUrl, ...loader.getLanguageTags() })
               const pageValues = { title: loader.getTitle(), language, translation_key: translationKey }
 
               if (page?.last_processed && page.content_hash === contentHash) {

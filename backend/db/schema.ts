@@ -773,8 +773,9 @@ export const websitePages = pgTable("website_pages", {
   // The page's language as an ISO 639-1 code (see readPageLanguage), so website search prefers pages in the conversation's
   // language. Null when the page doesn't say
   language: text("language"),
-  // Shared by the page's translations on the website, so search leaves out a page in another language than the conversation's
-  // when it found its translation. Null until the crawler reads the page again after it was added
+  // Shared by the page's translations, on this or another of the business's websites, so search leaves out a page in another
+  // language than the conversation's when it returns its translation: an address of the site's host, path and query (see
+  // readPageLanguage). Null until the crawler reads the page again after it was added
   translation_key: text("translation_key"),
 })
 

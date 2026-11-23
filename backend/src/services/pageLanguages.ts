@@ -1,6 +1,6 @@
 import type { PageAlternate } from "@/utils/htmlPage"
 
-import { sameSite } from "./websiteUrls"
+import { siteHost } from "./websiteUrls"
 
 // The languages of a website's pages, which the crawler records (src/tasks/websiteCrawler) so website search prefers pages in
 // the conversation's language and leaves out a page's translation into another one
@@ -25,48 +25,58 @@ export function baseLanguage(tag: string | null | undefined): string | undefined
 export const inLanguage = (page: { language: string | null }, language: string | undefined) =>
   !language || !page.language || page.language === language
 
-// A path's leading language segment, as in /es/blog or /en-gb/about
-const LANGUAGE_SEGMENT = /^\/([a-z]{2}(?:[-_][a-z]{2,4})?)(?=\/|$)/i
+// A path's leading language segment, as in /es/blog, /en-gb/about or /es-419/about
+const LANGUAGE_SEGMENT = /^\/([a-z]{2}(?:[-_](?:[a-z]{2,4}|\d{3}))?)(?=\/|$)/i
 
-// The path without its leading segment when that segment is the language, so /es/blog and /blog are translations of each other
-function withoutLanguageSegment(path: string, language: string | undefined) {
-  const segment = LANGUAGE_SEGMENT.exec(path)
-  if (!segment || !language || baseLanguage(segment[1]) !== language) return path
-  return path.slice(segment[0].length) || "/"
-}
+// Query parameters that can name a page's language, as in /about?lang=es
+const LANGUAGE_PARAMS = new Set(["lang", "language", "locale", "hl"])
 
 // A path and query without trailing slashes, as a website links the same page with or without one
-const withoutTrailingSlash = (path: string) => path.replace(/\/+(?=\?|$)/, "") || "/"
+const withoutTrailingSlash = (path: string) => path.replace(/(?<=.)\/+(?=\?|$)/, "")
 
-// The path and query of a URL on the page's site, which hreflang links give as absolute URLs, often with or without www
-function sitePath(href: string, pageUrl: URL) {
-  const url = URL.parse(href, pageUrl)
-  if (!url || !sameSite(url.hostname, pageUrl.hostname)) return undefined
-  return withoutTrailingSlash(url.pathname + url.search)
+// The path without what names its language as the page's own: a leading segment or a query parameter in that language, so
+// /es/blog, /blog?lang=es and /blog are translations of each other. A path whose segment or parameter names another language,
+// such as /it/support on a page in English, is kept as it is
+function withoutLanguage(path: string, language: string | undefined) {
+  if (!language) return path
+  const segment = LANGUAGE_SEGMENT.exec(path)
+  const rest = segment && baseLanguage(segment[1]) === language ? path.slice(segment[0].length) || "/" : path
+
+  const queryStart = rest.indexOf("?")
+  if (queryStart < 0) return rest
+  const params = new URLSearchParams(rest.slice(queryStart + 1))
+  const languageParams = [...params.keys()].filter((name) => LANGUAGE_PARAMS.has(name.toLowerCase()) && baseLanguage(params.get(name)) === language)
+  if (!languageParams.length) return rest
+  for (const name of languageParams) params.delete(name)
+  return (rest.slice(0, queryStart) || "/") + (params.size ? `?${params}` : "")
 }
 
-// The page's language and the key its translations share. The language is the one its <html> element declares, else the one its
-// own hreflang link gives it, else its path's leading language segment. Translations share the path of the x-default page their
-// hreflang links name, else the first of their paths in alphabetical order; a page without them shares its path without its
-// language segment
-export function readPageLanguage(page: { path: string; url: string; lang: string | undefined; alternates: PageAlternate[] }) {
-  const pageUrl = URL.parse(page.url)
-  const alternates = pageUrl
-    ? page.alternates.flatMap(({ hreflang, href }) => {
-        const path = sitePath(href, pageUrl)
-        return path ? [{ hreflang: hreflang.toLowerCase(), path }] : []
-      })
-    : []
-  const ownPaths = [page.path, ...(pageUrl ? [pageUrl.pathname + pageUrl.search] : [])].map(withoutTrailingSlash)
+// A page's address in translation keys: its site's host (with or without www), path and query, without trailing slashes. With
+// the host, translations on another of the business's websites (es.example.com) share a key too
+const pageAddress = (url: URL, path = url.pathname + url.search) => `${siteHost(url.hostname)}${withoutTrailingSlash(path)}`
 
-  const language =
-    baseLanguage(page.lang) ??
-    baseLanguage(alternates.find(({ path, hreflang }) => hreflang !== "x-default" && ownPaths.includes(path))?.hreflang) ??
-    baseLanguage(LANGUAGE_SEGMENT.exec(page.path)?.[1])
+// The page's language and the key its translations share. The page names both in its hreflang links when they list the page
+// itself, as Google asks: the language is its own link's, else its <html> element's, and the key is the first of its links'
+// addresses in alphabetical order. Without x-default, which some websites point at their home page from every page. Links that
+// don't list the page are taken to be shared by every page (such as a language switcher's) rather than its translations; then
+// the key is its address without its language's path segment or query parameter. A path segment alone doesn't set the
+// language, as /it or /uk can name a department or an office
+export function readPageLanguage(page: { listedUrl: URL; url: URL; lang: string | undefined; alternates: PageAlternate[] }) {
+  const ownAddresses = new Set([pageAddress(page.listedUrl), pageAddress(page.url)])
+  const links = page.alternates.flatMap(({ hreflang, href }) => {
+    const url = URL.parse(href, page.url)
+    return url && (url.protocol === "https:" || url.protocol === "http:") ? [{ hreflang: hreflang.toLowerCase(), address: pageAddress(url) }] : []
+  })
+  const listsItself = links.some(({ address }) => ownAddresses.has(address))
+  const translations = links.filter(({ hreflang }) => hreflang !== "x-default")
 
-  const translations = alternates.filter(({ hreflang }) => hreflang !== "x-default").map(({ path }) => path)
+  const ownLink = translations.find(({ address }) => ownAddresses.has(address))
+  const language = baseLanguage(ownLink?.hreflang) ?? baseLanguage(page.lang)
+
+  const listedPath = page.listedUrl.pathname + page.listedUrl.search
   const translationKey =
-    alternates.find(({ hreflang }) => hreflang === "x-default")?.path ?? translations.sort()[0] ?? withoutLanguageSegment(page.path, language)
+    (listsItself ? translations.map(({ address }) => address).sort()[0] : undefined) ??
+    pageAddress(page.listedUrl, withoutLanguage(listedPath, language))
 
-  return { language: language ?? null, translationKey: withoutTrailingSlash(translationKey) }
+  return { language: language ?? null, translationKey }
 }

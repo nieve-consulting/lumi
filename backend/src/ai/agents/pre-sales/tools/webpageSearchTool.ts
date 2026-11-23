@@ -42,7 +42,7 @@ export const webpageSearchTool = (state: AgentStateType, { embeddings }: PreSale
       const references = linked.map(({ title, url }) => ({ url, title }))
 
       return [
-        `The following passages were found on ${businessName}'s website, closest match first. Answer only with what they say:` +
+        `The following passages were found on ${businessName}'s website, closest match first, except that pages in another language than the visitor's come last. Answer only with what they say:` +
           JSON.stringify(found),
         { references },
       ]
