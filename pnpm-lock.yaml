@@ -282,8 +282,8 @@ importers:
         specifier: ^3.7.2
         version: 3.7.2
       minimatch:
-        specifier: ^10.2.6
-        version: 10.2.6
+        specifier: ^11.0.1
+        version: 11.0.5
       nodemailer:
         specifier: ^10.4.0
         version: 10.4.0
