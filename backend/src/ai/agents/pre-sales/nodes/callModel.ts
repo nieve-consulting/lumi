@@ -5,7 +5,7 @@ import { knowledgeSources } from "@/knowledge"
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch"
 import { AIMessage, AIMessageChunk, BaseMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages"
 import { RunnableConfig } from "@langchain/core/runnables"
-import type { MessageAnnotation } from "@lumi/shared-contracts/chat"
+import type { MessageAnnotation, Reference } from "@lumi/shared-contracts/chat"
 
 import { ensureConfiguration } from "../configuration"
 import { escapeMarkup } from "../messages"
@@ -37,12 +37,49 @@ function latestToolMessages(messages: BaseMessage[]) {
   return toolMessages
 }
 
+// The most pages linked under a reply. Website search returns up to five pages per query, and a list that long crowds the
+// reply, often with pages that only loosely match
+const MAX_REFERENCES = 3
+
+// Compares page URLs by site and path, as a website lists the same page with or without www, a trailing slash or a fragment
+function pageKey(url: string) {
+  try {
+    const { host, pathname, search } = new URL(url)
+    return `${host.toLowerCase().replace(/^www\./, "")}${pathname.replace(/\/+$/, "")}${search}`
+  } catch {
+    return undefined
+  }
+}
+
+// The pages linked under a reply, from each search's results (closest match first). The searches take turns, best match first,
+// so a reply that searched for two things links the best page of each: distances to different queries can't be compared. Each
+// page is linked once, and the page the visitor is reading is left out, as they don't need a link to it
+function replyReferences(searches: Reference[][], pageUrl: string | undefined) {
+  const linked = new Set<string>()
+  const currentPage = pageUrl && pageKey(pageUrl)
+  if (currentPage) linked.add(currentPage)
+
+  const references: Reference[] = []
+  const rounds = Math.max(...searches.map((results) => results.length))
+  for (let rank = 0; rank < rounds && references.length < MAX_REFERENCES; rank++) {
+    for (const results of searches) {
+      const reference = results[rank]
+      const key = reference && pageKey(reference.url)
+      if (!key || linked.has(key) || references.length === MAX_REFERENCES) continue
+      linked.add(key)
+      references.push(reference)
+    }
+  }
+  return references
+}
+
 export const createCallModel = (sources: PreSalesSources) =>
   async function callModel(state: AgentStateType, config: RunnableConfig): Promise<AgentStateUpdateType | undefined> {
     const additional_kwargs: MessageAnnotation = {}
     const configuration = ensureConfiguration(config)
     const toolMessages = latestToolMessages(state.messages)
     const directMessages: string[] = []
+    const searches: Reference[][] = []
 
     for (const { artifact } of toolMessages) {
       if (artifact && "cards" in artifact) {
@@ -50,13 +87,16 @@ export const createCallModel = (sources: PreSalesSources) =>
       }
 
       if (artifact && "references" in artifact) {
-        additional_kwargs.references = [...(additional_kwargs.references ?? []), ...artifact.references]
+        searches.push(artifact.references)
       }
 
       if (artifact && "directMessage" in artifact) {
         directMessages.push(artifact.directMessage)
       }
     }
+
+    const references = replyReferences(searches, configuration.pageUrl)
+    if (references.length) additional_kwargs.references = references
 
     let response: AIMessageChunk | undefined = undefined
 

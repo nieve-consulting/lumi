@@ -76,7 +76,10 @@ export const en = ({ assistantName, businessName }: MessageBrand) => ({
     startingChat: "Starting chat...",
     closed: "Conversation is closed",
     startNew: "Start new conversation",
-    learnMore: "Learn more here:",
+    // Collapsed by default under a reply: the website pages it drew on
+    sources: (count: number) => `Sources (${count})`,
+    // Read by screen readers after each source link
+    opensInNewTab: "(opens in a new tab)",
     unknownCard: (cardType: string) => `Unknown Custom UI: ${cardType}`,
   },
   scrollButton: {
