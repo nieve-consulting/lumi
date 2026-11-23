@@ -59,14 +59,15 @@ function MessageCards({ cards }: { cards: Card[] }) {
   )
 }
 
-// The website pages a reply drew on, collapsed to one line so they don't crowd the conversation. Long titles stay on one line
-function MessageSources({ references }: { references: Reference[] }) {
+// The website pages a reply's searches matched best, collapsed to one line so they don't crowd the conversation. Long titles
+// stay on one line. outline-hidden rather than outline-none keeps focus visible in forced-colors mode, which hides the ring
+function RelatedPages({ references }: { references: Reference[] }) {
   const { t } = useI18n()
 
   return (
     <Collapsible className="mt-1 text-xs text-slate-500">
-      <CollapsibleTrigger className="group focus-visible:ring-ring inline-flex items-center gap-1 rounded py-1 outline-none hover:text-slate-700 hover:underline focus-visible:ring-2">
-        {t.messages.sources(references.length)}
+      <CollapsibleTrigger className="group focus-visible:ring-ring inline-flex items-center gap-1 rounded py-1 outline-hidden hover:text-slate-700 hover:underline focus-visible:ring-2">
+        {t.messages.relatedPages(references.length)}
         <ChevronDown size={14} aria-hidden className="transition-transform group-data-[state=open]:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -74,14 +75,17 @@ function MessageSources({ references }: { references: Reference[] }) {
           {references.map((reference, idx) => (
             <li key={idx} className="flex min-w-0 items-center gap-1.5">
               <Globe size={13} aria-hidden className="shrink-0" />
+              {/* The pages are the business's own, so the referrer is kept for its analytics. The full title shows on hover over
+                  the text rather than the link, so screen readers don't read it again as the link's description */}
               <a
                 target="_blank"
-                rel="noopener noreferrer"
+                rel="noopener"
                 href={reference.url}
-                title={reference.title}
-                className="focus-visible:ring-ring flex min-w-0 items-center gap-1 rounded py-1 outline-none hover:text-slate-700 hover:underline focus-visible:ring-2"
+                className="focus-visible:ring-ring flex min-w-0 items-center gap-1 rounded py-1 outline-hidden hover:text-slate-700 hover:underline focus-visible:ring-2"
               >
-                <span className="truncate">{reference.title}</span>
+                <span className="truncate" title={reference.title}>
+                  {reference.title}
+                </span>
                 <ExternalLink size={11} aria-hidden className="shrink-0" />
                 <span className="sr-only">{t.messages.opensInNewTab}</span>
               </a>
@@ -115,7 +119,7 @@ export default function AssistantMessage({ ref, tabIndex, message, isStreaming }
           </LumiMarkdown>
         </div>
         {messageAnnotation?.cards && <MessageCards cards={messageAnnotation.cards} />}
-        {!!messageAnnotation?.references?.length && <MessageSources references={messageAnnotation.references} />}
+        {!!messageAnnotation?.references?.length && <RelatedPages references={messageAnnotation.references} />}
       </div>
     </div>
   )
