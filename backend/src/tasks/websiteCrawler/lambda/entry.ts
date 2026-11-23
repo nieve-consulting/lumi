@@ -5,6 +5,7 @@ import { WebpageDocumentLoader } from "@/langchain/document-loaders/WebpageDocum
 import { UsageReportingEmbeddings } from "@/langchain/embeddings/UsageReportingEmbeddings"
 import { SemanticChunker } from "@/langchain/text-splitters/SemanticChunker"
 import { LumiVectorStore, VECTOR_EMBEDDINGS } from "@/langchain/vector-stores/LumiVectorStore"
+import { readPageLanguage } from "@/services/pageLanguages"
 import { failQueuedWebsiteCrawl, withWebsiteCrawlLock } from "@/services/websiteCrawls"
 import { isExcludedPath, normalizeWebsiteUrl, sameSite, sitemapUrlOf } from "@/services/websiteUrls"
 import { createDb } from "@/utils/db-setup"
@@ -263,7 +264,7 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
 
               const page = await dbSession.query.websitePages.findFirst({
                 where: (websitePages, { eq, and }) => and(eq(websitePages.website_id, website.id), eq(websitePages.path, path)),
-                columns: { id: true, last_processed: true, content_hash: true },
+                columns: { id: true, last_processed: true, content_hash: true, translation_key: true },
               })
 
               // A page the sitemap dates is only fetched when modified since it was last processed. One it doesn't date is
@@ -272,7 +273,9 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
               // from where it stopped rather than fetching the same pages again
               const lastMod = lastmod ? new Date(lastmod) : undefined
               const dated = lastMod !== undefined && !Number.isNaN(lastMod.getTime())
-              if (page?.last_processed && dated && lastMod <= page.last_processed) {
+              // A page crawled before languages were recorded has no translation key: it is fetched once more to read its language,
+              // and only embedded again when its text changed
+              if (page?.last_processed && page.translation_key !== null && dated && lastMod <= page.last_processed) {
                 console.log(`Not modified path: ${path}`)
                 await crawl.pageChecked(false)
                 continue
@@ -284,6 +287,7 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
               }
 
               let html: string
+              let pageUrl: string
               try {
                 const fetched = await safeFetch(loc, { ...FETCH_LIMITS, contentTypes: PAGE_CONTENT_TYPES, accept: PAGE_ACCEPT })
                 const finalUrl = URL.parse(fetched.url)
@@ -303,6 +307,7 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
                   continue
                 }
                 html = fetched.body
+                pageUrl = fetched.url
               } catch (error) {
                 const outcome = pageFetchOutcome(error)
                 if (!outcome) throw new CrawlFailure(`Page ${path} couldn't be loaded: ${reasonOf(error)}`, { cause: error })
@@ -332,10 +337,15 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
                 .join("\n")
                 .trim()
               const contentHash = createHash("sha256").update(text).digest("hex")
+              const { language, translationKey } = readPageLanguage({ path, url: pageUrl, ...loader.getLanguageTags() })
+              const pageValues = { title: loader.getTitle(), language, translation_key: translationKey }
 
               if (page?.last_processed && page.content_hash === contentHash) {
-                // Its search content is still current: only when it was checked and its title are kept
-                await dbSession.update(websitePages).set({ last_processed: new Date(), title: loader.getTitle() }).where(eq(websitePages.id, pageId))
+                // Its search content is still current: only when it was checked, its title and its language are kept
+                await dbSession
+                  .update(websitePages)
+                  .set({ last_processed: new Date(), ...pageValues })
+                  .where(eq(websitePages.id, pageId))
                 console.log(`Unchanged path: ${path}`)
                 await crawl.pageChecked(false)
                 continue
@@ -352,7 +362,7 @@ export async function crawlWebsites(event: CrawlEvent | undefined, remainingTime
 
                 await dbSession
                   .update(websitePages)
-                  .set({ last_processed: new Date(), title: loader.getTitle(), content_hash: contentHash })
+                  .set({ last_processed: new Date(), ...pageValues, content_hash: contentHash })
                   .where(eq(websitePages.id, pageId))
               } catch (error) {
                 throw new CrawlFailure(`Page ${path} couldn't be indexed`, { cause: error })

@@ -1,17 +1,21 @@
 import { QUERY_MODEL } from "@/ai/models"
 import { emitStatusUpdate } from "@/ai/utils"
+import { baseLanguage, inLanguage } from "@/services/pageLanguages"
 import { tool } from "@langchain/core/tools"
 import { z } from "zod"
 
 import { invokeRetrievalContextualizedQuery } from "../chains/retrievalContextualize"
+import { ensureConfiguration } from "../configuration"
 import type { AgentStateType } from "../state"
 import { runText } from "../text"
 import type { PreSalesSources } from "../types"
 
 const USE_CONTEXT_LAST_MESSAGES = 5 // Use last 5 messages as context to generate query
 
-// Searches the pages of the business's websites (EmbeddingSource.searchWebsite) and links them as references. The
-// description names the business, so it only changes when its settings do
+// Searches the pages of the business's websites (EmbeddingSource.searchWebsite) and links them as references. It prefers pages
+// in the language of the visitor's latest message, else the chat's, and links only those when it found any: a page in another
+// language still informs the reply, but a link to it doesn't help the visitor. The description names the business, so it only
+// changes when its settings do
 export const webpageSearchTool = (state: AgentStateType, { embeddings }: PreSalesSources, businessName: string) =>
   tool(
     async (input, config) => {
@@ -24,7 +28,8 @@ export const webpageSearchTool = (state: AgentStateType, { embeddings }: PreSale
 
       const queryContext = await invokeRetrievalContextualizedQuery(QUERY_MODEL, lastMessages, input.query)
 
-      const results = await embeddings.searchWebsite(queryContext.query)
+      const language = baseLanguage(state.replyLanguage) ?? ensureConfiguration(config).language
+      const results = await embeddings.searchWebsite(queryContext.query, language)
       if (results.length === 0) {
         return [
           `Nothing on ${businessName}'s website matches this query. Do not answer it from assumptions or general knowledge: say you don't have that information.`,
@@ -33,7 +38,8 @@ export const webpageSearchTool = (state: AgentStateType, { embeddings }: PreSale
       }
 
       const found = results.map(({ title, url, passages }) => ({ title, url, content: passages }))
-      const references = results.map(({ title, url }) => ({ url, title }))
+      const linked = results.some((result) => inLanguage(result, language)) ? results.filter((result) => inLanguage(result, language)) : results
+      const references = linked.map(({ title, url }) => ({ url, title }))
 
       return [
         `The following passages were found on ${businessName}'s website, closest match first. Answer only with what they say:` +

@@ -68,11 +68,26 @@ function content(page$: CheerioAPI) {
   return body.html() ?? ""
 }
 
-export function readHtmlPage(html: string): { title: string | undefined; ogTitle: string | undefined; markdown: string } {
+// A link to one of the page's translations (<link rel="alternate" hreflang>), as the page gives its language and address
+export type PageAlternate = { hreflang: string; href: string }
+
+export function readHtmlPage(html: string): {
+  title: string | undefined
+  ogTitle: string | undefined
+  // The language the page declares on its <html> element, as written
+  lang: string | undefined
+  alternates: PageAlternate[]
+  markdown: string
+} {
   const page$ = cheerioLoad(html)
   // Read before cleaning: the <title> of an inline <svg> must not stand in for a page without one
   const title = page$("head title").first().text().trim() || page$("title").not("svg title").first().text().trim() || undefined
   const ogTitle = page$("meta[property='og:title']").attr("content")?.trim() || undefined
+  const lang = page$("html").attr("lang")?.trim() || undefined
+  const alternates = page$("link[rel~='alternate'][hreflang][href]")
+    .toArray()
+    .map((link) => ({ hreflang: page$(link).attr("hreflang")!.trim(), href: page$(link).attr("href")!.trim() }))
+    .filter(({ hreflang, href }) => hreflang && href)
   clean(page$)
-  return { title, ogTitle, markdown: turndownService.turndown(content(page$)).trim() }
+  return { title, ogTitle, lang, alternates, markdown: turndownService.turndown(content(page$)).trim() }
 }

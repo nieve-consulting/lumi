@@ -770,6 +770,12 @@ export const websitePages = pgTable("website_pages", {
   // SHA-256 of the page's extracted text when it was last indexed. A page the sitemap gives no last modified date for is
   // fetched once per completed crawl, and only embedded again when its text changed
   content_hash: text("content_hash"),
+  // The page's language as an ISO 639-1 code (see readPageLanguage), so website search prefers pages in the conversation's
+  // language. Null when the page doesn't say
+  language: text("language"),
+  // Shared by the page's translations on the website, so search leaves out a page in another language than the conversation's
+  // when it found its translation. Null until the crawler reads the page again after it was added
+  translation_key: text("translation_key"),
 })
 
 export const websitePagesRelations = relations(websitePages, ({ one, many }) => ({
