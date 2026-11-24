@@ -22,7 +22,8 @@ turndownService.addRule("blockLink", {
   filter: (node) => node.nodeName === "A" && !!node.getAttribute("href") && !!node.querySelector(BLOCKS),
   replacement: (content, node) => {
     const element = node as HTMLElement
-    const href = element.getAttribute("href")!.replace(/([()])/g, "\\$1")
+    // Backslashes first, so one in the address can't escape the parenthesis after it and end the link early
+    const href = element.getAttribute("href")!.replace(/([\\()])/g, "\\$1")
     const name = element.querySelector("h1, h2, h3, h4, h5, h6")?.textContent?.replace(/\s+/g, " ").trim() || "Link"
     return `\n\n${content.trim()}\n\n[${turndownService.escape(name)}](${href})\n\n`
   },
