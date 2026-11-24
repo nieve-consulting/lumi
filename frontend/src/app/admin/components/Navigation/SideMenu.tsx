@@ -1,8 +1,13 @@
 import AdminNav from "./AdminNav"
 import Brand from "./Brand"
 
+interface SideMenuProps {
+  // Shown below the links: the installation's Lumi version
+  footer?: React.ReactNode
+}
+
 // Desktop navigation. Below lg the header's MobileMenu opens the same links in a drawer
-export default function SideMenu() {
+export default function SideMenu({ footer }: SideMenuProps) {
   return (
     <div
       id="admin-sidebar"
@@ -10,6 +15,7 @@ export default function SideMenu() {
     >
       <Brand />
       <AdminNav className="flex-1" />
+      {footer}
     </div>
   )
 }

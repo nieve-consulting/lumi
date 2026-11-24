@@ -14,6 +14,7 @@ import { companyResolvers } from "./company/resolvers"
 import { dashboardResolvers } from "./dashboard/resolvers"
 import { experienceResolvers } from "./experience/resolvers"
 import { handoffResolvers } from "./handoff/resolvers"
+import { installationResolvers } from "./installation/resolvers"
 import { jobOpeningResolvers } from "./jobOpenings/resolvers"
 import { knowledgeResolvers } from "./knowledge/resolvers"
 import { objectFields } from "./objectFields"
@@ -49,6 +50,7 @@ const merged = mergeResolvers([
   jobOpeningResolvers,
   apiKeysResolvers,
   resumeResolvers,
+  installationResolvers,
 ])
 
 type FieldResolvers = Record<string, GraphQLFieldResolver<unknown, Context> | undefined>

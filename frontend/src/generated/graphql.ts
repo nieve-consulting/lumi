@@ -674,6 +674,28 @@ export type LocalizedTextInput = {
   text: Scalars['String']['input'];
 };
 
+export type LumiRelease = {
+  __typename?: 'LumiRelease';
+  /** When the release was published, as an ISO 8601 timestamp */
+  publishedAt: Scalars['String']['output'];
+  /** The release's page on GitHub, with its notes */
+  url: Scalars['String']['output'];
+  /** The release's version, such as 0.63.0 */
+  version: Scalars['String']['output'];
+};
+
+export type LumiVersion = {
+  __typename?: 'LumiVersion';
+  /** Whether the latest release could be checked: OFF when LUMI_UPDATE_CHECK turns the check off, UNAVAILABLE when GitHub couldn't be reached */
+  check: UpdateCheck;
+  /** The version the backend image was built from, such as 0.62.0. local or unknown for a build without a release version */
+  current: Scalars['String']['output'];
+  /** The latest published release. Null unless check is OK */
+  latest?: Maybe<LumiRelease>;
+  /** Whether latest is a newer release than current. False when the check isn't OK or current isn't a release version */
+  updateAvailable: Scalars['Boolean']['output'];
+};
+
 export type McpAuditEvent = {
   __typename?: 'McpAuditEvent';
   actorEmail: Scalars['String']['output'];
@@ -1372,6 +1394,8 @@ export type Query = {
   /** Job openings, most recently posted first, with their content in the language, English by default: one with no translation in it, or an outdated one (English changed after it was saved), is returned in English. missingLanguage keeps those with no translation in it, not even a draft. Only published job openings unless includeUnpublished */
   jobOpenings?: Maybe<Array<Maybe<JobOpening>>>;
   knowledgeSources: KnowledgeSources;
+  /** The Lumi version this installation runs and the latest published release, so admins learn when an upgrade is available */
+  lumiVersion: LumiVersion;
   /** Whether this installation has media storage, so images can be uploaded. Checks the configuration only: records nothing */
   mediaStorageConfigured: Scalars['Boolean']['output'];
   /** The project with its content in the language, English by default, as projects returns it. An unpublished project is not found unless includeUnpublished */
@@ -1770,6 +1794,12 @@ export type TranslationFieldInput = {
   /** The translation */
   text: Scalars['String']['input'];
 };
+
+export enum UpdateCheck {
+  Off = 'OFF',
+  Ok = 'OK',
+  Unavailable = 'UNAVAILABLE'
+}
 
 export type Website = {
   __typename?: 'Website';

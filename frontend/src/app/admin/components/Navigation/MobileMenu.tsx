@@ -14,8 +14,13 @@ import Brand from "./Brand"
 // Whether an element is display: none, as the trigger is from lg up. Safari only has checkVisibility() from 17.4
 const isHidden = (element: HTMLElement | null) => !element?.getClientRects().length
 
+interface MobileMenuProps {
+  // Shown below the links, as in SideMenu: the installation's Lumi version
+  footer?: React.ReactNode
+}
+
 // Navigation drawer for viewports below lg
-export default function MobileMenu() {
+export default function MobileMenu({ footer }: MobileMenuProps) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [prevPathname, setPrevPathname] = useState(pathname)
@@ -91,6 +96,7 @@ export default function MobileMenu() {
             </DialogClose>
           </div>
           <AdminNav className="flex-1" onNavigate={close} />
+          {footer}
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>

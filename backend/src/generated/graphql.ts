@@ -682,6 +682,28 @@ export type LocalizedTextInput = {
   text: Scalars['String']['input'];
 };
 
+export type LumiRelease = {
+  __typename?: 'LumiRelease';
+  /** When the release was published, as an ISO 8601 timestamp */
+  publishedAt: Scalars['String']['output'];
+  /** The release's page on GitHub, with its notes */
+  url: Scalars['String']['output'];
+  /** The release's version, such as 0.63.0 */
+  version: Scalars['String']['output'];
+};
+
+export type LumiVersion = {
+  __typename?: 'LumiVersion';
+  /** Whether the latest release could be checked: OFF when LUMI_UPDATE_CHECK turns the check off, UNAVAILABLE when GitHub couldn't be reached */
+  check: UpdateCheck;
+  /** The version the backend image was built from, such as 0.62.0. local or unknown for a build without a release version */
+  current: Scalars['String']['output'];
+  /** The latest published release. Null unless check is OK */
+  latest?: Maybe<LumiRelease>;
+  /** Whether latest is a newer release than current. False when the check isn't OK or current isn't a release version */
+  updateAvailable: Scalars['Boolean']['output'];
+};
+
 export type McpAuditEvent = {
   __typename?: 'McpAuditEvent';
   actorEmail: Scalars['String']['output'];
@@ -1380,6 +1402,8 @@ export type Query = {
   /** Job openings, most recently posted first, with their content in the language, English by default: one with no translation in it, or an outdated one (English changed after it was saved), is returned in English. missingLanguage keeps those with no translation in it, not even a draft. Only published job openings unless includeUnpublished */
   jobOpenings?: Maybe<Array<Maybe<JobOpening>>>;
   knowledgeSources: KnowledgeSources;
+  /** The Lumi version this installation runs and the latest published release, so admins learn when an upgrade is available */
+  lumiVersion: LumiVersion;
   /** Whether this installation has media storage, so images can be uploaded. Checks the configuration only: records nothing */
   mediaStorageConfigured: Scalars['Boolean']['output'];
   /** The project with its content in the language, English by default, as projects returns it. An unpublished project is not found unless includeUnpublished */
@@ -1779,6 +1803,12 @@ export type TranslationFieldInput = {
   text: Scalars['String']['input'];
 };
 
+export enum UpdateCheck {
+  Off = 'OFF',
+  Ok = 'OK',
+  Unavailable = 'UNAVAILABLE'
+}
+
 export type Website = {
   __typename?: 'Website';
   created_at: Scalars['String']['output'];
@@ -1984,6 +2014,8 @@ export type ResolversTypes = {
   KnowledgeSources: ResolverTypeWrapper<KnowledgeSources>;
   LocalizedText: ResolverTypeWrapper<LocalizedText>;
   LocalizedTextInput: LocalizedTextInput;
+  LumiRelease: ResolverTypeWrapper<LumiRelease>;
+  LumiVersion: ResolverTypeWrapper<LumiVersion>;
   McpAuditEvent: ResolverTypeWrapper<McpAuditEvent>;
   ModelUsage: ResolverTypeWrapper<ModelUsage>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
@@ -2025,6 +2057,7 @@ export type ResolversTypes = {
   TranslationDraftInput: TranslationDraftInput;
   TranslationDraftsResult: ResolverTypeWrapper<TranslationDraftsResult>;
   TranslationFieldInput: TranslationFieldInput;
+  UpdateCheck: UpdateCheck;
   Website: ResolverTypeWrapper<Website>;
   WebsiteCrawl: ResolverTypeWrapper<WebsiteCrawl>;
   WebsiteCrawlKind: WebsiteCrawlKind;
@@ -2094,6 +2127,8 @@ export type ResolversParentTypes = {
   KnowledgeSources: KnowledgeSources;
   LocalizedText: LocalizedText;
   LocalizedTextInput: LocalizedTextInput;
+  LumiRelease: LumiRelease;
+  LumiVersion: LumiVersion;
   McpAuditEvent: McpAuditEvent;
   ModelUsage: ModelUsage;
   Mutation: Record<PropertyKey, never>;
@@ -2474,6 +2509,19 @@ export type LocalizedTextResolvers<ContextType = Context, ParentType extends Res
   text?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type LumiReleaseResolvers<ContextType = Context, ParentType extends ResolversParentTypes['LumiRelease'] = ResolversParentTypes['LumiRelease']> = {
+  publishedAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  version?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type LumiVersionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['LumiVersion'] = ResolversParentTypes['LumiVersion']> = {
+  check?: Resolver<ResolversTypes['UpdateCheck'], ParentType, ContextType>;
+  current?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  latest?: Resolver<Maybe<ResolversTypes['LumiRelease']>, ParentType, ContextType>;
+  updateAvailable?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+};
+
 export type McpAuditEventResolvers<ContextType = Context, ParentType extends ResolversParentTypes['McpAuditEvent'] = ResolversParentTypes['McpAuditEvent']> = {
   actorEmail?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -2710,6 +2758,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   jobOpeningBySlug?: Resolver<Maybe<ResolversTypes['JobOpening']>, ParentType, ContextType, RequireFields<QueryJobOpeningBySlugArgs, 'includeUnpublished' | 'url_slug'>>;
   jobOpenings?: Resolver<Maybe<Array<Maybe<ResolversTypes['JobOpening']>>>, ParentType, ContextType, RequireFields<QueryJobOpeningsArgs, 'includeUnpublished'>>;
   knowledgeSources?: Resolver<ResolversTypes['KnowledgeSources'], ParentType, ContextType>;
+  lumiVersion?: Resolver<ResolversTypes['LumiVersion'], ParentType, ContextType>;
   mediaStorageConfigured?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   project?: Resolver<Maybe<ResolversTypes['Project']>, ParentType, ContextType, RequireFields<QueryProjectArgs, 'id' | 'includeUnpublished'>>;
   projectBySlug?: Resolver<Maybe<ResolversTypes['Project']>, ParentType, ContextType, RequireFields<QueryProjectBySlugArgs, 'includeUnpublished' | 'url_slug'>>;
@@ -2899,6 +2948,8 @@ export type Resolvers<ContextType = Context> = {
   JobOpeningTranslation?: JobOpeningTranslationResolvers<ContextType>;
   KnowledgeSources?: KnowledgeSourcesResolvers<ContextType>;
   LocalizedText?: LocalizedTextResolvers<ContextType>;
+  LumiRelease?: LumiReleaseResolvers<ContextType>;
+  LumiVersion?: LumiVersionResolvers<ContextType>;
   McpAuditEvent?: McpAuditEventResolvers<ContextType>;
   ModelUsage?: ModelUsageResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;

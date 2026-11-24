@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs"
 import { COUNT_LIMITS, DAILY_SPEND_LIMIT_VARIABLE, parseAmount, parseCount } from "@/ai/agents/limitSettings"
 import { MIN_TOKEN_SECRET_LENGTH, missingWorkspaceSignInSettings, parseAuthProvider, workspaceSignInSettings } from "@/mcp/settings"
+import { UPDATE_CHECK_VARIABLE, updateCheckSetting } from "@/services/updateCheck"
 import { decodeCaCertificates } from "@/utils/caCertificates"
 import { decodeServiceAccountKey } from "@/utils/serviceAccountKey"
 import { isPlaceholderSecret } from "@lumi/shared-contracts/secrets"
@@ -486,6 +487,22 @@ function checkCleanupSchedule(report: Report) {
   )
 }
 
+// The check for a newer release (src/services/updateCheck.ts), which the admin interface and the status command show. Any value
+// but on or off is refused rather than read as on, so a mistyped attempt to turn it off doesn't contact GitHub after all
+function checkUpdateCheck(report: Report, { announce }: { announce: boolean }) {
+  const setting = updateCheckSetting()
+  if (setting === undefined) {
+    report.problems.push(`${UPDATE_CHECK_VARIABLE} must be "on" (the default) or "off"`)
+    return
+  }
+  if (!announce) return
+  report.integrations.push(
+    setting === "off"
+      ? `update check: off (${UPDATE_CHECK_VARIABLE}=off)`
+      : `update check: on (asks GitHub's API for the latest Lumi release, sending nothing about the installation; set ${UPDATE_CHECK_VARIABLE}=off to turn it off)`
+  )
+}
+
 function checkConversationRetention(report: Report) {
   const value = env(CONVERSATION_RETENTION_VARIABLE)
   if (value === undefined) {
@@ -617,6 +634,7 @@ function checkCommand(command: Command): Report {
       checkEmail(report)
       checkGoogleCalendar(report)
       checkPdf(report)
+      checkUpdateCheck(report, { announce: true })
       break
     case "agents":
       checkPort(report, "agents")
@@ -646,9 +664,10 @@ function checkCommand(command: Command): Report {
       useBundledStorage(report, command)
       checkMediaStorage(report, { browserUploads: false })
       break
-    // It reports the media storage, and why the bundled one isn't set up
+    // It reports the media storage, and why the bundled one isn't set up, and the latest release
     case "status":
       useBundledStorage(report, command)
+      checkUpdateCheck(report, { announce: false })
       break
   }
 
