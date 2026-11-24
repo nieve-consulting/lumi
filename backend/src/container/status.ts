@@ -3,6 +3,7 @@ import { CHECKPOINTER_SCHEMA } from "@/ai/checkpointer"
 import { describeStorageProblem, isMediaStorageConfigured } from "@/apollo/sources/s3Source"
 import { LAST_ACTIVITY_SQL } from "@/services/conversationDeletion"
 import { STALE_DELIVERY_MS } from "@/services/enquiries"
+import { lumiVersion, lumiVersionState, UPDATE_CHECK_VARIABLE, type LumiVersionState } from "@/services/updateCheck"
 import { crawlStartOverdue, websiteCrawlLockHeld } from "@/services/websiteCrawls"
 import { capitalized } from "@/utils/text"
 import { listAppliedMigrations, readMigrationJournal, type JournalEntry } from "@db/migrator"
@@ -15,18 +16,19 @@ import { createCommandPool, describeError, VECTOR_MISSING } from "./commands"
 import { bundledStorageProblem, describeDatabase, describeMediaStorage, usesBundledStorage } from "./config"
 import { CHECKPOINTER_TABLES, MIGRATIONS_FOLDER } from "./health"
 
-// The status command: a read-only report for operators, before an upgrade and while monitoring. The image's version, the
-// schema's migrations, and what the database holds, as counts. It never prints secrets, visitor contact details or message
-// content: only the business's and the websites' names, which are public
+// The status command: a read-only report for operators, before an upgrade and while monitoring. The image's version and the
+// latest release, the schema's migrations, and what the database holds, as counts. It never prints secrets, visitor contact
+// details or message content: only the business's and the websites' names, which are public
 
 const STATUS_USAGE = `Usage: status
 
-Reports the image's Lumi version, which database and media storage the installation uses and whether they work, the
-database schema's migrations, whether the business is set up, and how many admin
+Reports the image's Lumi version and whether a newer release is published, which database and media storage the
+installation uses and whether they work, the database schema's migrations, whether the business is set up, and how many admin
 accounts, API keys, conversations, enquiries, knowledge records, website pages and uploaded images the installation holds.
 It changes nothing, except that it may write and delete a small check object in media storage when the storage's key may
-not read the bucket itself, as Amazon S3 keys limited to the bucket's objects can't. Exits with 1 when the database can't
-be reached.`
+not read the bucket itself, as Amazon S3 keys limited to the bucket's objects can't. To find the latest release it sends
+one request to GitHub's API, with nothing about the installation, unless ${UPDATE_CHECK_VARIABLE}=off. Exits with 1 when
+the database can't be reached.`
 
 // The image's bundled migrations, oldest first
 export const readJournal = () => readMigrationJournal(MIGRATIONS_FOLDER)
@@ -53,8 +55,6 @@ export async function readSchemaState(pool: Pool, journal: JournalEntry[]): Prom
   return { applied, latest, pending }
 }
 
-export const lumiVersion = () => process.env.LUMI_VERSION?.trim() || "unknown"
-
 const plural = (count: number, word: string, words = `${word}s`) => `${count} ${count === 1 ? word : words}`
 
 // Runs a section of the report, which shows why it couldn't be read rather than ending the report, e.g. on a database whose
@@ -77,6 +77,19 @@ function crawlState(status: string, startOverdue: boolean, crawling: boolean) {
 
 const DATE_FORMAT = `'YYYY-MM-DD HH24:MI "UTC"'`
 
+// The latest release beside the image's version, so an operator knows before upgrading what there is to upgrade to
+function describeLatestRelease(state: LumiVersionState) {
+  if (state.check === "OFF") return `Update check: off (${UPDATE_CHECK_VARIABLE}=off)`
+  if (state.check === "UNAVAILABLE") return `Couldn't check for a newer release: ${state.reason}`
+
+  const { version, url, publishedAt } = state.latest
+  const latest = `${version}, published ${publishedAt.slice(0, 10)}`
+  if (state.updateAvailable) return `A newer release is available: ${latest}. Its notes say how to upgrade: ${url}`
+  if (version === state.current) return `Up to date: the latest release is ${latest}`
+  // A build from a checkout (local), or one newer than the latest release
+  return `The latest release is ${latest}: ${url}`
+}
+
 export async function status(args: string[]): Promise<number> {
   try {
     const { values } = parseArgs({ args, options: { help: { type: "boolean", short: "h" } } })
@@ -88,6 +101,10 @@ export async function status(args: string[]): Promise<number> {
     console.error(`${(error as Error).message}\n\n${STATUS_USAGE}`)
     return 2
   }
+
+  // Asked first and shown after the schema, so GitHub's answer arrives while the database, storage and schema are checked. It
+  // never fails: the report says why it couldn't check, so the service doesn't log it too
+  const versionState = lumiVersionState({ logFailure: false })
 
   // Every query is bounded, so a report never hangs on a stuck database
   const pool = createCommandPool("lumi-status", { statementTimeoutMs: 60_000 })
@@ -152,6 +169,8 @@ export async function status(args: string[]): Promise<number> {
         `Checkpointer tables (conversation messages): ${checkpointerReady ? "ready" : "missing. Run migrate"}`,
       ]
     })
+
+    await section("Releases", async () => [describeLatestRelease(await versionState)])
     if (!ready) return 0
 
     await section("Business", async () => {

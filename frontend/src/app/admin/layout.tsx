@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { Metadata } from "next"
 import NextTopLoader from "nextjs-toploader"
 
@@ -8,6 +9,7 @@ import { Toaster } from "@/components/ui/toaster"
 
 import Breadcrumbs from "./components/Breadcrumbs/Breadcrumbs"
 import { getKnowledgeSources } from "./components/getKnowledgeSources"
+import LumiVersionInfo, { LumiVersionPlaceholder } from "./components/Navigation/LumiVersionInfo"
 import MobileMenu from "./components/Navigation/MobileMenu"
 import SideMenu from "./components/Navigation/SideMenu"
 import { SourceLabelsProvider } from "./components/SourceLabelsProvider"
@@ -31,6 +33,13 @@ export default async function Layout({ children }: LayoutProps) {
     capabilities: sources.capabilities,
     jobOpenings: sources.jobOpenings,
   }
+  // Streams in after the navigation, which doesn't wait for it. Nothing shows while it loads or when it fails, in the version
+  // line's height, so the Settings links above it only move up when the taller notice of a newer release arrives
+  const version = (
+    <Suspense fallback={<LumiVersionPlaceholder />}>
+      <LumiVersionInfo />
+    </Suspense>
+  )
 
   return (
     <SourceLabelsProvider labels={labelsOf(sources)} sources={switches}>
@@ -40,10 +49,10 @@ export default async function Layout({ children }: LayoutProps) {
       >
         Skip to content
       </a>
-      <SideMenu />
+      <SideMenu footer={version} />
       <div className="lg:ml-sidebar mb-5 px-4">
         <div className="flex gap-2 py-2">
-          <MobileMenu />
+          <MobileMenu footer={version} />
           <div className="content-center">
             <Breadcrumbs />
           </div>

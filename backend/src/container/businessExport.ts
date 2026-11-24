@@ -2,6 +2,7 @@ import { parseArgs } from "node:util"
 import S3Source, { isAccessDenied, isMediaStorageConfigured } from "@/apollo/sources/s3Source"
 import { channelAvailability } from "@/handoff/delivery"
 import { withTransaction } from "@/services/db"
+import { lumiVersion } from "@/services/updateCheck"
 import type { JournalEntry } from "@db/migrator"
 import * as schema from "@db/schema"
 import { HandoffSettingsError, parseHandoffSettings, type DeliveryChannelConfig } from "@lumi/shared-contracts/handoff"
@@ -11,7 +12,7 @@ import type { PoolClient } from "pg"
 import { z } from "zod"
 
 import { createCommandPool, describeError, UUID_PATTERN } from "./commands"
-import { lumiVersion, readJournal, readSchemaState, type SchemaState } from "./status"
+import { readJournal, readSchemaState, type SchemaState } from "./status"
 
 // The export and import commands, which move a business's setup between installations of the same Lumi version: its
 // settings, knowledge records and uploaded images, in one JSON document (the lumi-export format, version 1):

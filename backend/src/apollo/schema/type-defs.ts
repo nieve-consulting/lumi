@@ -11,6 +11,7 @@ import { companyTypeDefs } from "./company/types.gql"
 import { dashboardTypeDefs } from "./dashboard/types.gql"
 import { experienceTypeDefs } from "./experience/types.gql"
 import { handoffTypeDefs } from "./handoff/types.gql"
+import { installationTypeDefs } from "./installation/types.gql"
 import { jobOpeningsTypeDefs } from "./jobOpenings/types.gql"
 import { knowledgeTypeDefs } from "./knowledge/types.gql"
 import { projectsTypeDefs } from "./projects/types.gql"
@@ -46,4 +47,5 @@ export const typeDefs = mergeTypeDefs([
   jobOpeningsTypeDefs,
   apiKeysTypeDefs,
   resumeTypeDefs,
+  installationTypeDefs,
 ])
