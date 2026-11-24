@@ -5,6 +5,10 @@ packages:
 overrides:
   # @ai-sdk/otel pins an exact ai version; share the workspace's ai so its telemetry matches the ai that sends the events
   '@ai-sdk/otel>ai': ^7.0.141
+  # Security fixes the dependents' own ranges don't reach yet: graphql-config and nodemon still require minimatch ^10
+  # (GHSA-g3hv-75wg-m249), and @tailwindcss/typography pins postcss-selector-parser 6.0.10 (GHSA-rj75-hqrm-r3gf)
+  'minimatch@>=7.0.0 <11.0.1': ^11.0.5
+  'postcss-selector-parser@<6.1.5': ^6.1.5
 allowBuilds:
   '@apollo/protobufjs': true
   aws-sdk: true
