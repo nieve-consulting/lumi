@@ -99,7 +99,12 @@ async function fetchLatestRelease(logFailure: boolean): Promise<Lookup> {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
     if (response.ok) {
-      const release = parseRelease(await response.json().catch(() => undefined))
+      // Only a body that isn't JSON is a malformed answer: a timeout or dropped connection while reading it is reported as one
+      const body: unknown = await response.json().catch((error: unknown) => {
+        if (error instanceof SyntaxError) return undefined
+        throw error
+      })
+      const release = parseRelease(body)
       if (release) return { release }
       reason = "GitHub's answer wasn't the release expected"
     } else {
@@ -116,11 +121,14 @@ async function fetchLatestRelease(logFailure: boolean): Promise<Lookup> {
 let cached: { lookup: Lookup; expiresAt: number } | undefined
 let inFlight: Promise<Lookup> | undefined
 
-// One request at a time, however many callers ask meanwhile
+// One request at a time, however many callers ask meanwhile. A failed refresh keeps a release already known, so a passing
+// GitHub problem such as a used-up rate limit doesn't hide an available upgrade, and tries again in an hour
 function refresh(logFailure: boolean) {
   inFlight ??= fetchLatestRelease(logFailure)
-    .then((lookup) => {
-      cached = { lookup, expiresAt: Date.now() + ("release" in lookup ? SUCCESS_TTL_MS : FAILURE_TTL_MS) }
+    .then((fetched) => {
+      const known = cached && "release" in cached.lookup ? cached.lookup : undefined
+      const lookup = "release" in fetched ? fetched : (known ?? fetched)
+      cached = { lookup, expiresAt: Date.now() + ("release" in fetched ? SUCCESS_TTL_MS : FAILURE_TTL_MS) }
       return lookup
     })
     .finally(() => {

@@ -9,7 +9,7 @@ import { Toaster } from "@/components/ui/toaster"
 
 import Breadcrumbs from "./components/Breadcrumbs/Breadcrumbs"
 import { getKnowledgeSources } from "./components/getKnowledgeSources"
-import LumiVersionInfo from "./components/Navigation/LumiVersionInfo"
+import LumiVersionInfo, { LumiVersionPlaceholder } from "./components/Navigation/LumiVersionInfo"
 import MobileMenu from "./components/Navigation/MobileMenu"
 import SideMenu from "./components/Navigation/SideMenu"
 import { SourceLabelsProvider } from "./components/SourceLabelsProvider"
@@ -33,10 +33,10 @@ export default async function Layout({ children }: LayoutProps) {
     capabilities: sources.capabilities,
     jobOpenings: sources.jobOpenings,
   }
-  // Streams in after the navigation, which doesn't wait for it. Nothing shows while it loads or when it fails. The fallback
-  // keeps the version line's height, so the Settings links above it don't move up when it arrives
+  // Streams in after the navigation, which doesn't wait for it. Nothing shows while it loads or when it fails, in the version
+  // line's height, so the Settings links above it only move up when the taller notice of a newer release arrives
   const version = (
-    <Suspense fallback={<div aria-hidden className="h-4" />}>
+    <Suspense fallback={<LumiVersionPlaceholder />}>
       <LumiVersionInfo />
     </Suspense>
   )

@@ -4,6 +4,11 @@ import { getLumiVersion } from "./getLumiVersion"
 
 const UPGRADE_DOCS_URL = "https://docs.lumi.nieve.ai/self-hosting/operations#upgrades"
 
+// As tall as the version line, so the links above it stay put: the Suspense fallback while it loads, and what shows when it fails
+export function LumiVersionPlaceholder() {
+  return <div aria-hidden className="h-4" />
+}
+
 // "Lumi 0.62.0" for a release, and an honest name for builds without a release version
 function versionLabel(current: string) {
   if (current === "local") return "Lumi development build"
@@ -34,11 +39,12 @@ function ExternalLink({ href, children, context }: ExternalLinkProps) {
 }
 
 // The version this installation runs at the foot of the admin navigation and, when a newer release exists, a quiet pointer
-// to its notes and the upgrade guide. Shows nothing when the version couldn't be loaded, and only the version when the
-// release check is off or GitHub couldn't be reached. Render it inside a Suspense boundary so the navigation never waits
+// to its notes and the upgrade guide. Shows only the placeholder when the version couldn't be loaded, and only the version
+// when the release check is off or GitHub couldn't be reached. Render it inside a Suspense boundary with LumiVersionPlaceholder
+// as the fallback, so the navigation never waits
 export default async function LumiVersionInfo() {
   const version = await getLumiVersion()
-  if (!version) return null
+  if (!version) return <LumiVersionPlaceholder />
 
   // updateAvailable is only true for a release version, so current is a version number below
   const latest = version.updateAvailable ? version.latest : undefined

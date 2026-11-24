@@ -10,8 +10,10 @@ import { getAdminClient } from "@/lib/adminApiClient"
 // from a backend without the field. Once per request, as the side menu and the mobile drawer both show it. The backend
 // caches the release check, so this doesn't reach GitHub on every page
 export const getLumiVersion = cache(async (): Promise<LumiVersion | undefined> => {
+  // Outside the try, so its redirect to sign-in isn't caught as a failure
+  const client = await getAdminClient()
+
   try {
-    const client = await getAdminClient()
     const { data } = await client.query<Query>({
       query: gql`
         query LumiVersion {

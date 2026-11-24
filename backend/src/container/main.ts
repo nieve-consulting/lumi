@@ -17,7 +17,8 @@ One-off:
   admin-reset <email> [--name "Name"]
                                Create an admin account or reset its password to a temporary one
   checkpoint-cleanup [--apply] Report (or with --apply, delete) checkpoint data chats no longer need
-  status                       Report the version, the schema's migrations and what the installation holds
+  status                       Report the version, the schema's migrations and what the installation holds, and ask
+                               GitHub's API for the latest release unless LUMI_UPDATE_CHECK=off
   export [--include-secrets] [--without-media]
                                Write the business's settings, knowledge and images to stdout as JSON (run with -T)
   import [--dry-run]           Import an export from stdin into a fresh installation of the same version (run with -T)

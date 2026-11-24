@@ -102,8 +102,8 @@ export async function status(args: string[]): Promise<number> {
     return 2
   }
 
-  // Asked first, so GitHub's answer arrives while the database is checked. It never fails: the report says why it couldn't
-  // check, so the service doesn't log it too
+  // Asked first and shown after the schema, so GitHub's answer arrives while the database, storage and schema are checked. It
+  // never fails: the report says why it couldn't check, so the service doesn't log it too
   const versionState = lumiVersionState({ logFailure: false })
 
   // Every query is bounded, so a report never hangs on a stuck database
@@ -118,7 +118,6 @@ export async function status(args: string[]): Promise<number> {
     }
 
     console.log(`\nLumi ${lumiVersion()}`)
-    console.log(`  ${describeLatestRelease(await versionState)}`)
 
     await section("Database", async () => {
       const { rows } = await pool.query<{ version: string; installed: string | null; available: string | null }>(
@@ -170,6 +169,8 @@ export async function status(args: string[]): Promise<number> {
         `Checkpointer tables (conversation messages): ${checkpointerReady ? "ready" : "missing. Run migrate"}`,
       ]
     })
+
+    await section("Releases", async () => [describeLatestRelease(await versionState)])
     if (!ready) return 0
 
     await section("Business", async () => {
