@@ -15,16 +15,41 @@ const BLOCKS = "address, article, blockquote, div, dl, figure, h1, h2, h3, h4, h
 // A share of the page's text above which an element is taken to be the page's content rather than a part of it
 const CONTENT_SHARE = 0.5
 
+// A link's address as a Markdown link destination. Browsers drop tabs and line breaks from an address and trim its ends. A
+// backslash is escaped too, so one in the address can't escape the character after it and end the link early, and an address
+// with spaces goes in <…>, where Markdown allows them (turndown's own links escape neither backslashes nor all of these)
+function linkDestination(href: string) {
+  const address = href
+    .replace(/[\t\n\r]/g, "")
+    .trim()
+    .replace(/([\\<>()])/g, "\\$1")
+  return address.includes(" ") ? `<${address}>` : address
+}
+
+const isLink = (node: HTMLElement) => node.nodeName === "A" && !!node.getAttribute("href")
+const wrapsBlock = (node: HTMLElement) => !!node.querySelector(BLOCKS)
+
 const turndownService = new TurndownService()
+// Replaces turndown's inline link rule for its escaping. A title keeps turndown's line breaks, with backslashes and quotes escaped
+turndownService.addRule("inlineLink", {
+  filter: (node) => isLink(node) && !wrapsBlock(node),
+  replacement: (content, node) => {
+    const element = node as HTMLElement
+    const title = element
+      .getAttribute("title")
+      ?.replace(/(\n+\s*)+/g, "\n")
+      .replace(/(["\\])/g, "\\$1")
+    return `[${content}](${linkDestination(element.getAttribute("href")!)}${title ? ` "${title}"` : ""})`
+  },
+})
 // A link around a block (a listing's card) can't be written as one Markdown link, so the card's text comes first and the link
 // after it, named by the card's heading
 turndownService.addRule("blockLink", {
-  filter: (node) => node.nodeName === "A" && !!node.getAttribute("href") && !!node.querySelector(BLOCKS),
+  filter: (node) => isLink(node) && wrapsBlock(node),
   replacement: (content, node) => {
     const element = node as HTMLElement
-    const href = element.getAttribute("href")!.replace(/([()])/g, "\\$1")
     const name = element.querySelector("h1, h2, h3, h4, h5, h6")?.textContent?.replace(/\s+/g, " ").trim() || "Link"
-    return `\n\n${content.trim()}\n\n[${turndownService.escape(name)}](${href})\n\n`
+    return `\n\n${content.trim()}\n\n[${turndownService.escape(name)}](${linkDestination(element.getAttribute("href")!)})\n\n`
   },
 })
 
